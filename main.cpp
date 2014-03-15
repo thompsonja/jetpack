@@ -5,49 +5,48 @@
 
 /*NOTES: My axis system placed the y axis as going up and down, as reflected in the program
 
-		 When placing an object or billboard, it has to be placed one away from the far
-		 edge at the furthest.  For example, for a 128x128 terrain, the object can be placed
-		 from 1, 1 to 127, 127.  For non-square terrains, the x-coordinate of the object
-		 must be smaller than width, and the y-coordinate (really z-coordinate for my system)
-		 must be smaller than length, where width and length are defined in the map pgm file
+When placing an object or billboard, it has to be placed one away from the far
+edge at the furthest.  For example, for a 128x128 terrain, the object can be placed
+from 1, 1 to 127, 127.  For non-square terrains, the x-coordinate of the object
+must be smaller than width, and the y-coordinate (really z-coordinate for my system)
+must be smaller than length, where width and length are defined in the map pgm file
 
-		 Filenames *must* not have spaces in them
+Filenames *must* not have spaces in them
 
-		 The origin of the terrain corresponds to the bottom left point in the pgm file
+The origin of the terrain corresponds to the bottom left point in the pgm file
 
+x-axis    y-axis
+\     |
+ \    |
+  \   |
+   \  |
+    \ |
+     \|__________ Z-axis
 
-     	x-axis    y-axis
-			\     |
-			 \    |
-	   		  \   |
-			   \  |
-			    \ |
-			     \|__________ Z-axis
+ranges:
+x: [0, map->height - 1]
+y: [minHeight, maxHeight]
+z: [0, map->width - 1]
 
-		 ranges:
-		 x: [0, map->height - 1]
-		 y: [minHeight, maxHeight]
-		 z: [0, map->width - 1]
+My environment starts with x and z equal to zero, even though objects and billboards
+are placed starting from 1, 1.  I take care of this in the program, but for mapfiles
+with unequal width and heights, some consideration needs to be made when defining where
+to place objects.  For example, the feep.pgm included in the zip has width 24 and length 7.
+All objects/billboards can be defined anywhere from 1 1 to 24 7 in this case.  Objects/billboards
+are placed at the vertex specified, so placing it at 1 1 will put it at the very corner!
 
-		 My environment starts with x and z equal to zero, even though objects and billboards
-		 are placed starting from 1, 1.  I take care of this in the program, but for mapfiles
-		 with unequal width and heights, some consideration needs to be made when defining where
-		 to place objects.  For example, the feep.pgm included in the zip has width 24 and length 7.
-		 All objects/billboards can be defined anywhere from 1 1 to 24 7 in this case.  Objects/billboards
-		 are placed at the vertex specified, so placing it at 1 1 will put it at the very corner!
+Environment file is a global variable, change it to change what file to use
 
-		 Environment file is a global variable, change it to change what file to use
+When g is hit, the user can switch windows by either alt-tabbing or by leaving the window from the
+right side, as I use glutWarpPointer to force the user's pointer to stay within the window
 
-		 When g is hit, the user can switch windows by either alt-tabbing or by leaving the window from the
-		 right side, as I use glutWarpPointer to force the user's pointer to stay within the window
+Sun is set to be at the opposite corner from where you start, and 3 times the height range
+(maxHeight - minHeight) high
 
-		 Sun is set to be at the opposite corner from where you start, and 3 times the height range
-		 (maxHeight - minHeight) high
-
-		 HEIGHT must be first keyword in environment file, or at least be before any object or billboard
-		 declarations, because I use the values read in the height map to determine whether or not to insert
-		 objects or billboards into their respective linked lists, as I don't insert them if they're defined
-		 to be outside of the terrain.
+HEIGHT must be first keyword in environment file, or at least be before any object or billboard
+declarations, because I use the values read in the height map to determine whether or not to insert
+objects or billboards into their respective linked lists, as I don't insert them if they're defined
+to be outside of the terrain.
 */
 
 #include <Windows.h>
@@ -60,11 +59,12 @@
 #include <time.h>
 #include <math.h>
 #include <glaux.h>
+#include "User.h"
+#include "SphereRing.h"
+#include "Box.h"
 
 const double PI = 3.14159265358979323846;
 
-#define FALSE 0
-#define TRUE 1
 #define STATIC 0					//for OBJ types
 #define ANIMATED 1					//for OBJ types
 #define TILED 0						//tile the terrain texture, applying it to each quad
@@ -75,22 +75,22 @@ int width=1280, height=960;			//initial window values
 float FPS = 100;
 float speed = 1;
 
-int failureSound = 0;
-int passedSound = 0;
-int jetPackSound = 0;
+bool failureSound = false;
+bool passedSound = false;
+bool jetPackSound = false;
 
 //Texture array
 GLuint texture[10];					//storage for 10 textures
-									//0 -> terrain texture
-									//1 -> water texture
-									//2 -> sky texture
-									//3,4 -> sun textures
-									//rest -> billboard textures
+//0 -> terrain texture
+//1 -> water texture
+//2 -> sky texture
+//3,4 -> sun textures
+//rest -> billboard textures
 
 //Call lists
-GLuint terrainList;					//for terrain call list
-GLuint waterList;					//for water call list
-GLuint *objectList;					//for object call list
+GLuint terrainList;	//for terrain call list
+GLuint waterList;   //for water call list
+GLuint *objectList;	//for object call list
 GLuint lightList[7];
 
 //Values read in from the environment
@@ -117,26 +117,26 @@ float oldMouseX = 0;				//stores change in x when mouse is unclicked
 float oldMouseY = 0;				//stores change in y when mouse is unclicked
 int oldY;
 float dx = width/2;					//change in mouse x coordinate, used as an amount
-									//to rotate around y axis (up) to pan the screen
+//to rotate around y axis (up) to pan the screen
 float dy = height/2;				//change in mouse y coordinate, used as an amount
-									//to rotate around x axis to look higher up or down
+//to rotate around x axis to look higher up or down
 int whatButton = 0;					//what mouse button is clicked 
-									//(0 = none, 1 = left, 2 = right, 3 = both)
+//(0 = none, 1 = left, 2 = right, 3 = both)
 
 //variables affecting how fast things are animated (alter these according to system speed)
 int animationSpeed = 5;				//affects animation speed for objects, etc. (lower = faster)
 
-int skySpeed = 50;					//affects sky speed.  Even though the project description
-									//said to rotate it X degrees per render, as determined
-									//by the environment file, this tended to cause it to rotate
-									//hundreds of revolutions per second, so I don't want to cause
-									//seizures in people viewing this on faster computers
-									//(lower = faster)
+int skySpeed = 50;	//affects sky speed.  Even though the project description
+//said to rotate it X degrees per render, as determined
+//by the environment file, this tended to cause it to rotate
+//hundreds of revolutions per second, so I don't want to cause
+//seizures in people viewing this on faster computers
+//(lower = faster)
 
 int waterSpeed = 100;				//how fast water oscillates
 
 float jumpFactor = 0;
-int jumped = 0;
+bool jumped = 0;
 float jumpHeight;					//height in which the user jumps
 float g = -90;
 float yVel = 0;
@@ -162,11 +162,10 @@ int whichSun = 0;					//which sun to render (based on random seed)
 
 int numOfObjects = 0;
 float terrainAngle;					//represents the initial angle to look at, for a square
-									//map this should be pi/4 radians
-int status = 1;						//generic status variable
+//map this should be pi/4 radians
 float scaleFactor = 1;				//how much to scale objects/billboards
 int tileTerrain = TILED;			//change this variable to make the terrain STRETCHED or TILED
-									
+
 float*** normals;					//like terrain, but holds normal vector for each quad
 float*** averageNormals;			//holds average normal vector for each vertex
 
@@ -175,552 +174,18 @@ int bmpx, bmpy;						//stores image width and height when textures are loaded
 
 char *environmentFile = "environment.txt"; //the environment file to be read in
 
+User player;
 
-//class for the jetpack energy meter
-class energyBar
-{
-private:
-	int maxLength;					//length of bar
-	int maxHeight;					//height of bar
-	float length;					//how full the bar is
-	int xpos;							//x pos of bar
-	int ypos;							//y pos of bar
-public:
-	energyBar();					//constructor
-	float getLength();
-	float getMaxLength();
-	float getMaxHeight();
-	void setPos(int xpos, int ypos);
-	void energyUp(float FPS, float amount);		//increases energy bar
-	void energyDown(float FPS, float amount);	//decreases energy bar
-	void drawBar();
-};
+SphereRing *firstRing, *lastRing, *currentRing, *sphRing;
 
-energyBar::energyBar()
-{
-	maxLength = width/5;
-	length = maxLength;
-	maxHeight = height/40;
-}
-
-class user
-{
-private:
-	float x;
-	float y;
-	float z;
-	float height;
-	float rad;
-public:
-	user();
-	energyBar healthBar;
-	energyBar jetPack;
-	void updatePos();
-	void moveForward();
-	void moveBackward();
-	void strafeLeft();
-	void strafeRight();
-	float getX();
-	float getY();
-	float getZ();
-	float getHeight();
-	float getRad();
-	void crouch();
-	void uncrouch();
-	void setX(float x);
-	void setY(float y);
-	void setZ(float z);
-	bool onBox;
-};
-
-user::user():healthBar(), jetPack()
-{
-	x = 0;
-	y = 0;
-	z = 0;
-	height = 6;
-	rad = 1.5;
-	onBox = false;
-}
-
-void user::updatePos()
-{
-	glLoadIdentity();
-	
-	//rotates and moves the camera
-	glRotatef(dy*mouseYsens, 1, 0, 0);
-	glRotatef(dx*mouseXsens, 0, 1, 0);
-	glRotatef(180 - terrainAngle*180/PI, 0, 1, 0);
-	
-	glTranslatef(-x, -y, -z);
-}
-
-void user::moveForward()
-{
-	x += 300.0/FPS*.1*speed*sin((dx*fabs(mouseXsens))*PI/180 + terrainAngle);
-	y += 300.0/FPS*.1*speed*sin((dy*fabs(mouseYsens))*PI/180);
-	z += 300.0/FPS*.1*speed*cos((dx*fabs(mouseXsens))*PI/180 + terrainAngle);
-}
-
-void user::moveBackward()
-{
-	x -= 300.0/FPS*.1*speed*sin((dx*fabs(mouseXsens))*PI/180 + terrainAngle);
-	y -= 300.0/FPS*.1*speed*sin((dy*fabs(mouseYsens))*PI/180);
-	z -= 300.0/FPS*.1*speed*cos((dx*fabs(mouseXsens))*PI/180 + terrainAngle);
-}
-
-void user::strafeLeft()
-{
-	x += 300.0/FPS*.1*speed*cos((dx*fabs(mouseXsens))*PI/180 + terrainAngle);
-	z -= 300.0/FPS*.1*speed*sin((dx*fabs(mouseXsens))*PI/180 + terrainAngle);
-}
-
-void user::strafeRight()
-{
-	x -= 300.0/FPS*.1*speed*cos((dx*fabs(mouseXsens))*PI/180 + terrainAngle);
-	z += 300.0/FPS*.1*speed*sin((dx*fabs(mouseXsens))*PI/180 + terrainAngle);
-}
-
-float user::getX()
-{
-	return x;
-}
-
-float user::getY()
-{
-	return y;
-}
-
-float user::getZ()
-{
-	return z;
-}
-
-float user::getHeight()
-{
-	return height;
-}
-
-float user::getRad()
-{
-	return rad;
-}
-
-void user::crouch()
-{
-	height = 4;
-}
-
-void user::uncrouch()
-{
-	height = 6;
-}
-
-void user::setX(float x)
-{
-	this->x = x;
-}
-
-void user::setY(float y)
-{
-	this->y = y;
-}
-
-void user::setZ(float z)
-{
-	this->z = z;
-}
-
-user player;
-
-float energyBar::getLength()
-{
-	return length;
-}
-
-float energyBar::getMaxLength()
-{
-	return maxLength;
-}
-
-float energyBar::getMaxHeight()
-{
-	return maxHeight;
-}
-
-void energyBar::setPos(int xpos, int ypos)
-{
-	this->xpos = xpos;
-	this->ypos = ypos;
-}
-
-void energyBar::energyUp(float FPS, float amount)
-{
-	if(amount == 0)
-		length += 300/FPS * .25;
-	else
-		length += amount;
-
-	if(length > maxLength)
-		length = maxLength;
-
-}
-
-void energyBar::energyDown(float FPS, float amount)
-{
-	if(amount == 0)
-	{
-		if(length > 0)
-		{
-			length -= 300/FPS * .25;
-			yVel += 300/FPS * .48;
-			if(!jumped)
-			{
-				jumped = 1;
-				jumpHeight = player.getY();
-				yVel = 10;
-			}
-		}
-	}
-	else
-		length -= fabs(amount*maxLength);
-
-	if(length < 0)
-		length = 0;
-}
-
-void energyBar::drawBar()
-{
-	glColor3f(1, 0, 0);
-	glBegin(GL_LINE_LOOP);
-	glVertex3f(xpos, ypos, 0.0f);
-	glVertex3f(xpos + maxLength, ypos, 0.0f);
-	glVertex3f(xpos + maxLength, ypos + maxHeight, 0.0f);
-	glVertex3f(xpos, ypos + maxHeight, 0.0f);
-	glEnd();
-
-	if(length/maxLength > 2.0/3)
-		glColor4f(0, .5, 0, 1.0);
-	else if(length/maxLength <= 2.0/3 && length/maxLength > 1.0/3)
-		glColor4f(1, 1, 0, 1.0);
-	else if(length/maxLength < 1.0/3)
-		glColor4f(1, 0, 0, 1.0);
-	glBegin(GL_LINES);
-	for(int i = 1; i < length; i++)
-	{
-		glVertex3f(xpos + i, ypos, 0.0f);
-		glVertex3f(xpos + i, ypos + maxHeight - 1, 0.0f);
-	}
-	glEnd();
-}
-
-class sphereRing
-{
-private:
-	GLuint ringList;
-	int numOfSpheres;
-	float sphereRad;
-	float ringRad;
-	float angle;
-	float tempAngle;
-	int ringX;
-	int ringY;
-	int ringZ;
-	int whichList;
-public:
-	sphereRing *previous, *next;
-	sphereRing(int x, int y, int z, float ang, int num, float sphRad, float rRad);
-	void insert();
-	void drawList();
-	void drawRing(float FPS);
-	void setList(int list);
-	int isPassed();
-	static int numOfRings;
-	static int ringsPassed;
-};
-int sphereRing::numOfRings = 0;
-int sphereRing::ringsPassed = 0;
-
-sphereRing::sphereRing(int x, int y, int z, float ang, int num, float sphRad, float rRad)
-{
-	numOfSpheres = num;
-	angle = ang;
-	sphereRad = sphRad;
-	ringRad = rRad;
-	ringX = x;
-	ringY = y;
-	ringZ = z;
-	tempAngle = 0;
-	whichList = 4;
-	sphereRing::numOfRings++;
-}
-
-sphereRing *firstRing, *lastRing, *currentRing, *sphRing;
-
-void sphereRing::insert()
-{
-	sphereRing *temp;
-	temp = (sphereRing *)malloc(sizeof(sphereRing));
-
-	temp->numOfSpheres = numOfSpheres;
-	temp->angle = angle;
-	temp->sphereRad = sphereRad;
-	temp->ringRad = ringRad;
-	temp->ringX = ringX;
-	temp->ringY = ringY;
-	temp->ringZ = ringZ;
-	temp->whichList = 4;
-	temp->tempAngle = 0;
-	
-	temp->previous = currentRing;
-	temp->next = lastRing;
-	currentRing->next = temp;
-	currentRing = currentRing->next;
-	currentRing->next = lastRing;
-	lastRing->previous = currentRing;
-}
-
-void sphereRing::drawList()
-{
-	GLUquadricObj *quadratic;
-	
-	quadratic=gluNewQuadric();	
-	gluQuadricOrientation(quadratic, GLU_OUTSIDE);
-	gluQuadricNormals(quadratic, GLU_SMOOTH);
-	
-	float theta = 360.0/numOfSpheres;
-	
-	ringList = glGenLists(1);
-	glNewList(ringList, GL_COMPILE);
-
-	for(int i = 0; i < numOfSpheres; i++)
-	{
-		glPushMatrix();
-		glRotatef(i*theta, 0, 0, 1);
-		glTranslatef(ringRad, 0, 0);
-		gluSphere(quadratic, sphereRad, 16, 16);
-		glPopMatrix();
-	}
-	glEndList();
-}
-
-void sphereRing::drawRing(float FPS)
-{
-	float theta = 360.0/numOfSpheres;
-	GLUquadricObj *quadratic;
-
-	quadratic=gluNewQuadric();	
-	gluQuadricOrientation(quadratic, GLU_OUTSIDE);
-	gluQuadricNormals(quadratic, GLU_SMOOTH);
-
-	if((fabs(player.getX() - ringX*XLEN) < ringRad) && (fabs(player.getY() - ringY) < ringRad)
-					&& (fabs(player.getZ() - ringZ*ZLEN) < sphereRad))
-	{
-		if(whichList == 4)
-		{
-			whichList = 5;
-			passedSound = 1;
-		}
-	}
-
-	glDisable(GL_CULL_FACE);
-
-	glPushMatrix();
-
-	glTranslatef(ringX*XLEN, ringY, ringZ*ZLEN);
-	glRotatef(tempAngle, 0, 0, 1);
-
-	if(glIsEnabled(GL_LIGHTING))
-		glCallList(lightList[whichList]);
-	
-	glCallList(ringList);
-	glPopMatrix();
-
-	tempAngle += angle/FPS;
-
-	if (tempAngle > 360)
-		tempAngle -= 360;
-
-	glEnable(GL_CULL_FACE);
-}
-
-void sphereRing::setList(int list)
-{
-	whichList = list;
-}
-
-int sphereRing::isPassed()
-{
-	return whichList - 4;
-}
-
-class Box
-{
-private:
-	int exists;
-	float xlen;
-	float ylen;
-	float zlen;
-	float x;
-	float y;
-	float z;
-	int side;
-public:
-	Box(float xlen, float ylen, float zlen, float x, float y, float z);
-	void setExistence(int a);
-	int isExistent();
-	void draw(float FPS);
-};
-
-Box::Box(float xlen, float ylen, float zlen, float x, float y, float z)
-{
-	this->xlen = xlen;
-	this->ylen = ylen;
-	this->zlen = zlen;
-	this->x = x;
-	this->y = y;
-	this->z = z;
-	side = 0;
-}
-
-void Box::draw(float FPS)
-{
-	glBegin(GL_QUADS);
-	glNormal3f(-1, 0, 0);
-	glVertex3f(x + xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z + zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y + ylen/2, z - zlen/2);
-	glNormal3f(1, 0, 0);
-	glVertex3f(x - xlen/2, y - ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x - xlen/2, y - ylen/2, z - zlen/2);
-	glNormal3f(0, 0, -1);
-	glVertex3f(x - xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z - zlen/2);
-	glVertex3f(x - xlen/2, y - ylen/2, z - zlen/2);
-	glNormal3f(0, 0, 1);
-	glVertex3f(x + xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y - ylen/2, z + zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z + zlen/2);
-	glNormal3f(0, -1, 0);
-	glVertex3f(x - xlen/2, y - ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y - ylen/2, z + zlen/2);
-	glNormal3f(0, 1, 0);
-	glVertex3f(x + xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x + xlen/2, y + ylen/2, z + zlen/2);
-	glEnd();
-
-	if(side == 0)
-	{
-		x += 30/FPS;
-		if(x + xlen/2 >= 381)
-			side = 1;
-	}
-	if(side == 1)
-	{
-		z += 30/FPS;
-		if(z + zlen/2 >= 381)
-			side = 2;
-	}
-	if(side == 2)
-	{
-		x -= 30/FPS;
-		if(x - xlen/2 <= 0)
-			side = 3;
-	}
-	if(side == 3)
-	{
-		z -= 30/FPS;
-		if(z - zlen/2 <= 0)
-			side = 0;
-	}
-
-	if(fabs(player.getY() - (y + ylen/2)) < player.getHeight())
-	{
-		if(fabs(player.getZ() - z) < zlen/2 && fabs(player.getX() - x) < xlen/2)
-		{
-			if(yVel <= 0)
-			{
-				jumped = 0;
-				player.onBox = true;
-				player.setY(y + ylen/2 + player.getHeight());
-				yVel = 0;
-				if(side == 0)
-					player.setX(player.getX() + 30/FPS);
-				if(side == 1)
-					player.setZ(player.getZ() + 30/FPS);
-				if(side == 2)
-					player.setX(player.getX() - 30/FPS);
-				if(side == 3)
-					player.setZ(player.getZ() - 30/FPS);
-
-			}
-		}
-		else if(player.onBox)
-		{
-			jumped = 1;
-			player.setY(y + ylen/2 + player.getHeight());
-			player.onBox = false;
-			jumpHeight = y + ylen/2 + player.getHeight();
-		}
-		else
-		{
-			if(fabs(player.getZ() - z) < zlen/2)
-			{
-				if((player.getX() - x > - xlen/2 - player.getRad()) && (player.getX() - x < 0))
-				{
-					player.setX(x - xlen/2 - player.getRad());
-				}
-				else if(player.getX() - x < xlen/2 + player.getRad())
-				{
-					if(player.getX() - x > 0)
-						player.setX(x + xlen/2 + player.getRad());
-				}
-			}
-			if(fabs(player.getX() - x) < xlen/2)
-			{
-				if((player.getZ() - z > - zlen/2 - player.getRad()) && (player.getZ() - z < 0))
-				{
-					player.setZ(z - zlen/2 - player.getRad());
-				}
-				else if(player.getZ() - z < zlen/2 + player.getRad())
-				{
-					if(player.getZ() - z > 0)
-						player.setZ(z + zlen/2 + player.getRad());
-				}
-			}
-		}
-
-	}
-	
-}
-
-void Box::setExistence(int a)
-{
-	exists = a;
-}
-
-int Box::isExistent()
-{
-	return exists;
-}
-
-Box omgbox(8, 3, 8, 10, 10, 10);
+Box box(8, 3, 8, 10, 10, 10);
 
 //image struct used to store the heightmap
 typedef struct 
 {
-	double **grayValues;	//read in from the .pgm and later converted to actual heights
-	int width;
-	int height;
+  double **grayValues;	//read in from the .pgm and later converted to actual heights
+  int width;
+  int height;
 } image_type;
 
 image_type *map;
@@ -728,16 +193,16 @@ image_type *map;
 //obj type for objects defined in the environment file
 typedef struct obj
 {
-	float ***values;				//stores all the vertices etc. values
-	float minHeight;				//the bottom of the object
-	int objType;					//animated or static
-	char *objName;					//object's filename
-	int *modLines;					//lines of vertices etc. per file
-	int xpos;						
-	int zpos;
-	int fileCount;					//how many files are in the animation
-	int Counter;					//which file to animate in the frame
-	struct obj *next, *previous;
+  float ***values;				//stores all the vertices etc. values
+  float minHeight;				//the bottom of the object
+  int objType;					//animated or static
+  char *objName;					//object's filename
+  int *modLines;					//lines of vertices etc. per file
+  int xpos;						
+  int zpos;
+  int fileCount;					//how many files are in the animation
+  int Counter;					//which file to animate in the frame
+  struct obj *next, *previous;
 } obj;
 
 obj *first, *last, *current, *ob;	//these are used for the linked list, like in hw1
@@ -745,11 +210,11 @@ obj *first, *last, *current, *ob;	//these are used for the linked list, like in 
 //billboard type for billboards defined in the environment file
 typedef struct billboard
 {
-	int texNumber;									//the texture index for textures[]
-	int numOfBoards;								//how many billboards from env. file
-	int xpos[MAXBILLBOARDS], zpos[MAXBILLBOARDS];
-	int width, height;
-	struct billboard *next, *previous;
+  int texNumber;									//the texture index for textures[]
+  int numOfBoards;								//how many billboards from env. file
+  int xpos[MAXBILLBOARDS], zpos[MAXBILLBOARDS];
+  int width, height;
+  struct billboard *next, *previous;
 } billboard;
 
 billboard *firstBillboard, *lastBillboard, *currentBillboard, *bb; //these are used for the linked list, like in hw1
@@ -757,11 +222,11 @@ billboard *firstBillboard, *lastBillboard, *currentBillboard, *bb; //these are u
 //light type used for setting material properties
 typedef struct light_t
 {
-	float ambient[4];
-	float diffuse[4];
-	float specular[4];
-	float emission[4];
-	float shininess;
+  float ambient[4];
+  float diffuse[4];
+  float specular[4];
+  float emission[4];
+  float shininess;
 } light_t;
 
 light_t landlight, waterlight, objectlight, billboardlight, ringlighta, ringlightb, boxlight;
@@ -795,1934 +260,1921 @@ bool loadTextures(char *filename, int i)
 /*
 void PlaySound(Mix_Chunk *sound)
 {
-	//Play the sound on the first channel available, with no looping
-	if(Mix_PlayChannel(-1, sound, 0)==-1) 
-	{
-		//Must've been an error playing the sound!
-		printf("Mix_PlayChannel: %s\n", Mix_GetError());
-	}
+//Play the sound on the first channel available, with no looping
+if(Mix_PlayChannel(-1, sound, 0)==-1) 
+{
+//Must've been an error playing the sound!
+printf("Mix_PlayChannel: %s\n", Mix_GetError());
+}
 }
 */
 void billboardInsert(char *name, char *filename, int coords[MAXBILLBOARDS][2], int count)
 {
-	int i;
-	billboard *temp;
+  int i;
+  billboard *temp;
 
-	printf("	Loading billboard . . . . . . ");
-	temp = (billboard *)malloc(sizeof(billboard));
-	temp->texNumber = curTexture;					//set the billboard texture number to curTexture
-	temp->numOfBoards = count;						//how many billboards are listed in the line in the env. file
+  printf("	Loading billboard . . . . . . ");
+  temp = (billboard *)malloc(sizeof(billboard));
+  temp->texNumber = curTexture;					//set the billboard texture number to curTexture
+  temp->numOfBoards = count;						//how many billboards are listed in the line in the env. file
 
-	if(loadTextures(filename, temp->texNumber))		//if it loads the texture correctly
-	{
-		for(i = 0; i < count; i++)
-		{
-			//inserts the billboard into the linked list
-			temp->width = bmpx;
-			temp->height = bmpy;
-			temp->xpos[i] = coords[i][0];
-			temp->zpos[i] = coords[i][1];
+  if(loadTextures(filename, temp->texNumber))		//if it loads the texture correctly
+  {
+    for(i = 0; i < count; i++)
+    {
+      //inserts the billboard into the linked list
+      temp->width = bmpx;
+      temp->height = bmpy;
+      temp->xpos[i] = coords[i][0];
+      temp->zpos[i] = coords[i][1];
 
-			temp->previous = currentBillboard;
-			temp->next = lastBillboard;
-			currentBillboard->next = temp;
-			currentBillboard = currentBillboard->next;
-			currentBillboard->next = lastBillboard;
-			lastBillboard->previous = currentBillboard;
-		}
+      temp->previous = currentBillboard;
+      temp->next = lastBillboard;
+      currentBillboard->next = temp;
+      currentBillboard = currentBillboard->next;
+      currentBillboard->next = lastBillboard;
+      lastBillboard->previous = currentBillboard;
+    }
 
-		curTexture++;
-	}
-	else
-	{
-		//prints a failure statement :(
-		printf("FAILED\n\t\tCould not open billboard: %s\n", filename);
-		status = FALSE;
-	}
+    curTexture++;
+  }
+  else
+  {
+    //prints a failure statement :(
+    printf("FAILED\n\t\tCould not open billboard: %s\n", filename);
+  }
 }
 
 //inserts the object into a double linked list
 void objInsert(int type, char name[], int x, int z)
 {
-	obj *temp;
-	FILE *f;
-	char dummy;
-	char text[256];
-	char newname[32];
-	char buffer[256];
-	int line = 0;
-	int i, j;
-	int fileCounter = 1;
+  obj *temp;
+  FILE *f;
+  char dummy;
+  char text[256];
+  char newname[32];
+  char buffer[256];
+  int line = 0;
+  int i, j;
+  int fileCounter = 1;
 
-	temp = (obj *)malloc(sizeof(obj));
-	
-	//inserts a static object
-	if(type == STATIC)
-	{
-		temp->fileCount = 1;
-		temp->values = (float ***)malloc(1*sizeof(float **));
-		temp->modLines = (int *)malloc(1*sizeof(int));
-		f = fopen(name, "r");
-		if(f == NULL)
-		{
-			printf("FAILED\n\t\tCould not open object file: %s\n", name);
-			status = FALSE;
-		}
-		else
-		{
-			//first it reads how many lines of vertices, etc., there are in the .mod file
-			while(fgets(text, 128*sizeof(char), f) != NULL)
-			{
-				if (text[0] == 'N')
-					line++;
-			}
-			temp->modLines[0] = line;
+  bool status = true;
 
-			fclose(f);
-			//dynamically allocates the proper amount of space based on how many lines there are
-			temp->values[0] = (float **)malloc(line*sizeof(float *));
-		
-			//allocates 8 elements: first 3 are Normals, next 2 are for Tex coords, last 3 are vertices
-			for(i = 0; i < line; i++)
-				temp->values[0][i] = (float *)malloc(8*sizeof(float));
+  temp = (obj *)malloc(sizeof(obj));
 
-			f = fopen(name, "r");
+  //inserts a static object
+  if(type == STATIC)
+  {
+    temp->fileCount = 1;
+    temp->values = (float ***)malloc(1*sizeof(float **));
+    temp->modLines = (int *)malloc(1*sizeof(int));
+    f = fopen(name, "r");
+    if(f == NULL)
+    {
+      printf("FAILED\n\t\tCould not open object file: %s\n", name);
+      status = false;
+    }
+    else
+    {
+      //first it reads how many lines of vertices, etc., there are in the .mod file
+      while(fgets(text, 128*sizeof(char), f) != NULL)
+      {
+        if (text[0] == 'N')
+          line++;
+      }
+      temp->modLines[0] = line;
 
-			for(i = 0; fgets(text, 128*sizeof(char), f) != NULL; i++)
-			{
-		
-				//scans in the values for a line.  Note: I have it going as N, N[2],
-				//and N[1] because I took the y-direction as up and down, so putting
-				//it in this order made the object right-side-up.
+      fclose(f);
+      //dynamically allocates the proper amount of space based on how many lines there are
+      temp->values[0] = (float **)malloc(line*sizeof(float *));
 
-				sscanf(text, "%c%f%f%f%c%c%f%f%c%c%f%f%f", &dummy, &(temp->values[0][i][0]), 
-					&(temp->values[0][i][2]), &(temp->values[0][i][1]), &dummy, &dummy,
-					&(temp->values[0][i][3]), &(temp->values[0][i][4]), &dummy, &dummy, 
-					&(temp->values[0][i][5]), &(temp->values[0][i][7]), &(temp->values[0][i][6]));
-			}
-			fclose(f);
+      //allocates 8 elements: first 3 are Normals, next 2 are for Tex coords, last 3 are vertices
+      for(i = 0; i < line; i++)
+        temp->values[0][i] = (float *)malloc(8*sizeof(float));
 
-			//finds the minimum height of the object
-			temp->minHeight = temp->values[0][0][6];
-			for(i = 0; i < temp->modLines[0]; i++)
-			{
-				if (temp->values[0][i][6] < temp->minHeight)
-					temp->minHeight = temp->values[0][i][6];
-			}
-			printf("DONE\n");
-		}
-	}
-	else if (type == ANIMATED)
-	{
-		//gets the base name (ie anim.mod becomes anim)
-		for (i = 0; name[i] != '.'; i++)
-			newname[i] = name[i];
-		newname[i] = '\0';
+      f = fopen(name, "r");
 
-		//calculates how many files are in a row
-		for(sprintf(buffer, "%s%.2d%s%c", newname, fileCounter, ".mod", '\0'); 
-			(fopen(buffer, "r") != NULL); )
-		{
-			fileCounter++;
-			sprintf(buffer, "%s%.2d%s%c", newname, fileCounter, ".mod", '\0');
-		}
-		
-		//fileCounter will end up being one more than the number of files, so reduce it by one
-		temp->fileCount = fileCounter - 1;
-		//allocates memory like in the static case
-		temp->values = (float ***)malloc((temp->fileCount)*sizeof(float **));
-		temp->modLines = (int *)malloc((temp->fileCount)*sizeof(int));
+      for(i = 0; fgets(text, 128*sizeof(char), f) != NULL; i++)
+      {
 
-		//this is the same as for the static case, but this does it for each file
-		for(i = 0; i < temp->fileCount; i++)
-		{
-			line = 0;
-			sprintf(buffer, "%s%.2d%s%c", newname, i+1, ".mod", '\0');
-			f = fopen(buffer, "r");
-			while(fgets(text, 128*sizeof(char), f) != NULL)
-			{
-				if (text[0] == 'N')
-					line++;
-			}
-			fclose(f);
-			
-			temp->modLines[i] = line;
-			temp->values[i] = (float **)malloc((temp->modLines[i])*sizeof(float *));
-			for(j = 0; j < temp->modLines[i]; j++)
-				temp->values[i][j] = (float *)malloc(8*sizeof(float));
-			
-			f = fopen(buffer, "r");
-			
-			for(j = 0; fgets(text, 128*sizeof(char), f) != NULL; j++)
-			{
-		
-				//scans in the values for a line.  Note: I have it going as N, N[2],
-				//and N[1] because I took the y-direction as up and down, so putting
-				//it in this order made the object right-side-up.
+        //scans in the values for a line.  Note: I have it going as N, N[2],
+        //and N[1] because I took the y-direction as up and down, so putting
+        //it in this order made the object right-side-up.
 
-				sscanf(text, "%c%f%f%f%c%c%f%f%c%c%f%f%f", &dummy, &(temp->values[i][j][0]), 
-					&(temp->values[i][j][2]), &(temp->values[i][j][1]), &dummy, &dummy,
-					&(temp->values[i][j][3]), &(temp->values[i][j][4]), &dummy, &dummy, 
-					&(temp->values[i][j][5]), &(temp->values[i][j][7]), &(temp->values[i][j][6]));
-			}
-			fclose(f);
+        sscanf(text, "%c%f%f%f%c%c%f%f%c%c%f%f%f", &dummy, &(temp->values[0][i][0]), 
+          &(temp->values[0][i][2]), &(temp->values[0][i][1]), &dummy, &dummy,
+          &(temp->values[0][i][3]), &(temp->values[0][i][4]), &dummy, &dummy, 
+          &(temp->values[0][i][5]), &(temp->values[0][i][7]), &(temp->values[0][i][6]));
+      }
+      fclose(f);
 
-			temp->minHeight = temp->values[0][0][6];
-			
-			for(j = 0; j < temp->modLines[0]; j++)
-			{
-				if (temp->values[0][j][6] < temp->minHeight)
-					temp->minHeight = temp->values[0][j][6];
-			}
-		}
-		//if the fileCounter is 1, that means it didn't load any files correctly, which is bad :(
-		if(fileCounter == 1)
-		{
-			printf("FAILED\n\t\tCould not open object file starting with: %s\n", newname);
-			status = FALSE;
-		}
-		else
-			printf("DONE\n");
-	}
+      //finds the minimum height of the object
+      temp->minHeight = temp->values[0][0][6];
+      for(i = 0; i < temp->modLines[0]; i++)
+      {
+        if (temp->values[0][i][6] < temp->minHeight)
+          temp->minHeight = temp->values[0][i][6];
+      }
+      printf("DONE\n");
+    }
+  }
+  else if (type == ANIMATED)
+  {
+    //gets the base name (ie anim.mod becomes anim)
+    for (i = 0; name[i] != '.'; i++)
+      newname[i] = name[i];
+    newname[i] = '\0';
 
-	//if the object was successfully loaded, insert it into the linked list
-	if(status == TRUE)
-	{
-		temp->Counter = 0;
-		temp->objType = type;
-		temp->xpos = x;
-		temp->zpos = z;
-		temp->objName = name;
+    //calculates how many files are in a row
+    for(sprintf(buffer, "%s%.2d%s%c", newname, fileCounter, ".mod", '\0'); 
+      (fopen(buffer, "r") != NULL); )
+    {
+      fileCounter++;
+      sprintf(buffer, "%s%.2d%s%c", newname, fileCounter, ".mod", '\0');
+    }
 
-		temp->previous = current;
-		temp->next = last;
-		current->next = temp;
-		current = current->next;
-		current->next = last;
-		last->previous = current;
+    //fileCounter will end up being one more than the number of files, so reduce it by one
+    temp->fileCount = fileCounter - 1;
+    //allocates memory like in the static case
+    temp->values = (float ***)malloc((temp->fileCount)*sizeof(float **));
+    temp->modLines = (int *)malloc((temp->fileCount)*sizeof(int));
 
-		numOfObjects++;
-	}
+    //this is the same as for the static case, but this does it for each file
+    for(i = 0; i < temp->fileCount; i++)
+    {
+      line = 0;
+      sprintf(buffer, "%s%.2d%s%c", newname, i+1, ".mod", '\0');
+      f = fopen(buffer, "r");
+      while(fgets(text, 128*sizeof(char), f) != NULL)
+      {
+        if (text[0] == 'N')
+          line++;
+      }
+      fclose(f);
+
+      temp->modLines[i] = line;
+      temp->values[i] = (float **)malloc((temp->modLines[i])*sizeof(float *));
+      for(j = 0; j < temp->modLines[i]; j++)
+        temp->values[i][j] = (float *)malloc(8*sizeof(float));
+
+      f = fopen(buffer, "r");
+
+      for(j = 0; fgets(text, 128*sizeof(char), f) != NULL; j++)
+      {
+
+        //scans in the values for a line.  Note: I have it going as N, N[2],
+        //and N[1] because I took the y-direction as up and down, so putting
+        //it in this order made the object right-side-up.
+
+        sscanf(text, "%c%f%f%f%c%c%f%f%c%c%f%f%f", &dummy, &(temp->values[i][j][0]), 
+          &(temp->values[i][j][2]), &(temp->values[i][j][1]), &dummy, &dummy,
+          &(temp->values[i][j][3]), &(temp->values[i][j][4]), &dummy, &dummy, 
+          &(temp->values[i][j][5]), &(temp->values[i][j][7]), &(temp->values[i][j][6]));
+      }
+      fclose(f);
+
+      temp->minHeight = temp->values[0][0][6];
+
+      for(j = 0; j < temp->modLines[0]; j++)
+      {
+        if (temp->values[0][j][6] < temp->minHeight)
+          temp->minHeight = temp->values[0][j][6];
+      }
+    }
+    //if the fileCounter is 1, that means it didn't load any files correctly, which is bad :(
+    if(fileCounter == 1)
+    {
+      printf("FAILED\n\t\tCould not open object file starting with: %s\n", newname);
+      status = false;
+    }
+    else
+      printf("DONE\n");
+  }
+
+  //if the object was successfully loaded, insert it into the linked list
+  if(status)
+  {
+    temp->Counter = 0;
+    temp->objType = type;
+    temp->xpos = x;
+    temp->zpos = z;
+    temp->objName = name;
+
+    temp->previous = current;
+    temp->next = last;
+    current->next = temp;
+    current = current->next;
+    current->next = last;
+    last->previous = current;
+
+    numOfObjects++;
+  }
 }
 
 //creates an image_type
 image_type *new_image(image_type *image, int w, int h, int max)
 {
-	int i;
+  int i;
 
-	image->width = w;
-	image->height = h;
-	maxval = max;
+  image->width = w;
+  image->height = h;
+  maxval = max;
 
-	//creates a 2D array to store grayscale values
-	image->grayValues = (double **)malloc(h*sizeof(double*));
-	for (i = 0; i < h; i++)
-		image->grayValues[i] = (double *)malloc(w*sizeof(double));
+  //creates a 2D array to store grayscale values
+  image->grayValues = (double **)malloc(h*sizeof(double*));
+  for (i = 0; i < h; i++)
+    image->grayValues[i] = (double *)malloc(w*sizeof(double));
 
-	return image;
+  return image;
 }
 
 //reads an image_type
 image_type *read_image(image_type *image, char *filename)
 {
-	int i, j;
-	FILE *inf;
-	char temp[256];
-	int width, height,color;
-	inf = fopen(filename, "r+");
-	//some error handling
-	if((inf = fopen(filename, "r+")) == NULL)
-	{
-		printf("Unable to open pgm file: %s!\n", filename);
-		exit(1);
-	}
-	if(fscanf(inf, " P2 "))
-	{
-		printf("not a valid pgm: %s!\n",filename);
-		exit(1);
-	}
-	
-	fgets(temp, 128 * sizeof(char), inf);
-	while(temp[0] == '#')						//skips commented lines
-		fgets(temp, 128 * sizeof(char), inf);
+  int i, j;
+  FILE *inf;
+  char temp[256];
+  int width, height,color;
+  inf = fopen(filename, "r+");
+  //some error handling
+  if((inf = fopen(filename, "r+")) == NULL)
+  {
+    printf("Unable to open pgm file: %s!\n", filename);
+    exit(1);
+  }
+  if(fscanf(inf, " P2 "))
+  {
+    printf("not a valid pgm: %s!\n",filename);
+    exit(1);
+  }
 
-	sscanf(temp, "%d %d", &width, &height);		//scans for width, height
-	fscanf(inf, "%d", &maxval);					//and maxval
+  fgets(temp, 128 * sizeof(char), inf);
+  while(temp[0] == '#')						//skips commented lines
+    fgets(temp, 128 * sizeof(char), inf);
 
-	//creates an image_type based on information in the .pgm file
-	image = new_image(image, width, height, maxval);
-	
-	//fills the 2D array with grayscale vlues from .pgm file
-	for(i=image->height - 1; i >= 0; i--)
-	{
-		for(j=0; j<image->width; j++)
-		{
-			fscanf(inf, "%d ", &color);
-			image->grayValues[i][j] = (double) color;
-		}
-	}
-	fclose(inf);
+  sscanf(temp, "%d %d", &width, &height);		//scans for width, height
+  fscanf(inf, "%d", &maxval);					//and maxval
 
-	return image;
+  //creates an image_type based on information in the .pgm file
+  image = new_image(image, width, height, maxval);
+
+  //fills the 2D array with grayscale vlues from .pgm file
+  for(i=image->height - 1; i >= 0; i--)
+  {
+    for(j=0; j<image->width; j++)
+    {
+      fscanf(inf, "%d ", &color);
+      image->grayValues[i][j] = (double) color;
+    }
+  }
+  fclose(inf);
+
+  return image;
 }
 
 //reads the environment file from myinit()
 void read_environment(char *filename)
 {
-	char keyword[10];
-	char param1[20];
-	char param2[20];
-	char param3[4];
-	char param4[4];
-	char temp[256];
-	int bbcoords[MAXBILLBOARDS][2];
-	int i, j, k, objx, objz, failCount = 0;
-	int x, y, z, num;
-	float ang, sphRad, rRad;
-	//these variables prevent the environment file from having two lines specifying things like
-	//texture, heightmap, water, etc.
-	int readHeight = 0, readTexture = 0, readLengths = 0, readWater = 0, readSky = 0, readSun = 0;
-	FILE *f;
+  char keyword[10];
+  char param1[20];
+  char param2[20];
+  char param3[4];
+  char param4[4];
+  char temp[256];
+  int bbcoords[MAXBILLBOARDS][2];
+  int i, j, k, objx, objz, failCount = 0;
+  int x, y, z, num;
+  float ang, sphRad, rRad;
+  //these variables prevent the environment file from having two lines specifying things like
+  //texture, heightmap, water, etc.
+  int readHeight = 0, readTexture = 0, readLengths = 0, readWater = 0, readSky = 0, readSun = 0;
+  FILE *f;
 
-	printf("Loading environment file: %s\n", filename);
-	f = fopen(filename, "r");
+  printf("Loading environment file: %s\n", filename);
+  f = fopen(filename, "r");
 
-	//grabs a new line from the env. file
-	while(fgets(temp, 128*sizeof(char), f) != NULL)
-	{
-		//skips any blank lines
-		if(temp[0] == '\n')
-			temp[0] = ' ';
-		for (i = 0; temp[i] != ' '; i++)
-			keyword[i] = temp[i];
-		keyword[i] = '\0';
+  //grabs a new line from the env. file
+  while(fgets(temp, 128*sizeof(char), f) != NULL)
+  {
+    //skips any blank lines
+    if(temp[0] == '\n')
+      temp[0] = ' ';
+    for (i = 0; temp[i] != ' '; i++)
+      keyword[i] = temp[i];
+    keyword[i] = '\0';
 
-		//compares the keyword to the possible keywords of
-		//HEIGHT, LENGTHS, TEXTURE, OBJ, BILLBOARD, SKYDOME, WATER, SUN
-		if(strcmp(keyword, "HEIGHT") == 0)
-		{
-			printf("	Loading height map  . . . . . ");
-			if(readHeight == 0)
-			{
-				while(temp[i] == ' ')	//skip whitespace
-					i++;
-				
-				for (j = 0; temp[i] != ' '; j++, i++)	//read in the name of the heightmap
-					param1[j] = temp[i];
-				param1[j] = '\0';
-				
-				map = (image_type *)malloc(sizeof(image_type)); //create a map image
-				map = read_image(map, param1); //read the map image
-				
-				//scans for minHeight and maxHeight
-				sscanf(temp + sizeof(char)*i, "%f %f", &minHeight, &maxHeight);
-				readHeight = 1;
-				printf("DONE\n");
-			}
-			else
-				printf("FAILED\n\t\tAlready read height map!\n");
-		}
-		else if(strcmp(keyword, "LENGTHS") == 0)
-		{
-			printf("	Loading lengths . . . . . . . ");
-			if(readLengths == 0)
-			{
-				//scans the XLEN and ZLEN values from the string
-				sscanf(temp + sizeof(char)*i, "%d %d", &XLEN, &ZLEN);
-				readLengths = 1;
-				printf("DONE\n");
-			}
-			else
-				printf("FAILED\n\t\tAlready read lengths!\n");
-		}
-		else if (strcmp(keyword, "TEXTURE") == 0)
-		{
-			printf("	Loading land texture  . . . . ");
-			if(readTexture == 0)
-			{
-				while(temp[i] == ' ')	//skips white space
-					i++;
-				//reads in the name of the texture.  For future reference, the strlen(temp)
-				//part is in case the texture is the last line, and there is no newline character
-				for (j = 0; temp[i] != '\n' && temp[i] != ' ' && i < (int)strlen(temp); j++, i++)
-					param1[j] = temp[i];
-				param1[j] = '\0';
-				
-				//Loads the texture and sets the textureExists parameter
-				textureExists = loadTextures(param1, 0);
-				if(textureExists)
-					printf("DONE\n");
-				else
-					printf("FAILED\n\t\tCould not open texture: %s\n", param1);
+    //compares the keyword to the possible keywords of
+    //HEIGHT, LENGTHS, TEXTURE, OBJ, BILLBOARD, SKYDOME, WATER, SUN
+    if(strcmp(keyword, "HEIGHT") == 0)
+    {
+      printf("	Loading height map  . . . . . ");
+      if(readHeight == 0)
+      {
+        while(temp[i] == ' ')	//skip whitespace
+          i++;
 
-				readTexture = 1;
-			}
-			else
-				printf("FAILED\n\t\tAlready read land texture!\n");
-		}
-		else if (strcmp(keyword, "OBJ") == 0)
-		{
-			//gets the first parameter, whether it is animated or not
-			while(temp[i] == ' ')
-				i++;
-			for(j = 0; temp[i] != ' '; j++, i++)
-				param1[j] = temp[i];
-			param1[j] = '\0';
+        for (j = 0; temp[i] != ' '; j++, i++)	//read in the name of the heightmap
+          param1[j] = temp[i];
+        param1[j] = '\0';
 
-			//gets the second parameter, the object's name
-			while(temp[i] == ' ')
-				i++;
-			for(j = 0; temp[i] != ' '; j++, i++)
-				param2[j] = temp[i];
-			param2[j] = '\0';
-			
-			//scans the string for the object's x and z values
-			//note that the first parameter is objz since in the pdf
-			//it is described as "column, row", and when reading in
-			//from the .pgm file, I define rows as marked by x and
-			//columns as marked by y
-			sscanf(temp + sizeof(char)*i, "%d %d", &objz, &objx);
+        map = (image_type *)malloc(sizeof(image_type)); //create a map image
+        map = read_image(map, param1); //read the map image
 
-			//inserts the object into the linked list
-			if(strcmp(param1, "Static") == 0)
-			{
-				printf("	Loading static object . . . . ");
-				if(objx > map->height || objz > map->width)
-					printf("FAILED\n\t\tObject outside of terrain\n");
-				else
-					objInsert(STATIC, param2, objx, objz);
-			}
-			else if(strcmp(param1, "Animated") == 0)
-			{
-				printf("	Loading animated object . . . ");
-				if(objx > map->height || objz > map->width)
-					printf("FAILED\n\t\tObject outside of terrain\n");
-				else
-				objInsert(ANIMATED, param2, objx, objz);
-			}
-		}
-		else if (strcmp(keyword, "BILLBOARD") == 0)
-		{
-			while(temp[i] == ' ')	//skip whitespace
-				i++;
-			for(j = 0; temp[i] != ' '; j++, i++)	//get name of billboard
-				param1[j] = temp[i];
-			param1[j] = '\0';
+        //scans for minHeight and maxHeight
+        sscanf(temp + sizeof(char)*i, "%f %f", &minHeight, &maxHeight);
+        readHeight = 1;
+        printf("DONE\n");
+      }
+      else
+        printf("FAILED\n\t\tAlready read height map!\n");
+    }
+    else if(strcmp(keyword, "LENGTHS") == 0)
+    {
+      printf("	Loading lengths . . . . . . . ");
+      if(readLengths == 0)
+      {
+        //scans the XLEN and ZLEN values from the string
+        sscanf(temp + sizeof(char)*i, "%d %d", &XLEN, &ZLEN);
+        readLengths = 1;
+        printf("DONE\n");
+      }
+      else
+        printf("FAILED\n\t\tAlready read lengths!\n");
+    }
+    else if (strcmp(keyword, "TEXTURE") == 0)
+    {
+      printf("	Loading land texture  . . . . ");
+      if(readTexture == 0)
+      {
+        while(temp[i] == ' ')	//skips white space
+          i++;
+        //reads in the name of the texture.  For future reference, the strlen(temp)
+        //part is in case the texture is the last line, and there is no newline character
+        for (j = 0; temp[i] != '\n' && temp[i] != ' ' && i < (int)strlen(temp); j++, i++)
+          param1[j] = temp[i];
+        param1[j] = '\0';
 
-			while(temp[i] == ' ')	//skip whitespace
-				i++;
-			for(j = 0; temp[i] != ' '; j++, i++)	//get filename of billboard
-				param2[j]= temp[i];
-			param2[j] = '\0';
-						
-			k = 0;
-			//get all the x/z coordinates
-			while(i < (int)strlen(temp))
-			{
-				if(k == MAXBILLBOARDS)	//I set MAXBILLBOARDS to 20
-				{
-					printf("	Warning: maximum billboard limit surpassed!\n");
-					break;
-				}
-				while(temp[i] == ' ' || temp[i] == '\n')	//skip whitespace
-					i++;
-				if(i < (int)strlen(temp))
-				{
-					for(j = 0; temp[i] != ' '; j++, i++)
-						param3[j] = temp[i];
-					param3[j] = '\0';
+        //Loads the texture and sets the textureExists parameter
+        textureExists = loadTextures(param1, 0);
+        if(textureExists)
+          printf("DONE\n");
+        else
+          printf("FAILED\n\t\tCould not open texture: %s\n", param1);
 
-					while(temp[i] == ' ')
-						i++;
-					
-					for(j = 0; temp[i] != ' ' && temp[i] != '\n' && i < (int)strlen(temp); j++, i++)
-						param4[j] = temp[i];
-					param4[j] = '\0';
+        readTexture = 1;
+      }
+      else
+        printf("FAILED\n\t\tAlready read land texture!\n");
+    }
+    else if (strcmp(keyword, "OBJ") == 0)
+    {
+      //gets the first parameter, whether it is animated or not
+      while(temp[i] == ' ')
+        i++;
+      for(j = 0; temp[i] != ' '; j++, i++)
+        param1[j] = temp[i];
+      param1[j] = '\0';
 
-					//scans z coordinate first then x coordinate for the same reason as objects
-					sscanf(param3, "%d", &bbcoords[k][1]);
-					sscanf(param4, "%d", &bbcoords[k][0]);
-					//if the billboard is outside of the terrain, increase failCount
-					if(bbcoords[k][0] > map->height || bbcoords[k][1] > map->width)
-						failCount++;
-					else
-						k++;
-				}
-			}
-			billboardInsert(param1, param2, bbcoords, k);
-			if(status == TRUE)
-			{
-				if(failCount)
-					printf("DONE WITH ERRORS\n\t\tOnly %d of %d billboards loaded!\n\t\t%d billboards outside of terrain\n", k, k + failCount, failCount);
-				else
-					printf("DONE\n");
-			}
-		}
-		else if (strcmp(keyword, "SKYDOME") == 0)
-		{
-			printf("	Loading skydome texture . . . ");
-			if(readSky == 0)
-			{	
-				while(temp[i] == ' ')	//skip whitespace
-					i++;
-				//get the bmp name for the skydome
-				for(j = 0; temp[i] != ' '; j++, i++)
-					param1[j] = temp[i];
-				param1[j] = '\0';
-				
-				//scan in the rotation angle
-				sscanf(temp + sizeof(char)*i, "%d", &skydomeAngle);
-				angle = skydomeAngle;	//set angle to skydomeAngle, since angle is what's actually going to be increased
-				if(skyExists = loadTextures(param1, 2))
-					printf("DONE\n");	//load texture
-				else
-					printf("FAILED\n\t\tCould not open texture: %s\n", param1);
-				
-				readSky = 1;
-			}
-			else
-				printf("FAILED\n\t\tAlready read skydome texture!\n");
-		}
-		else if (strcmp(keyword, "WATER") == 0)
-		{
-			printf("	Loading water texture . . . . ");
-			if(readWater == 0)
-			{
-				while(temp[i] == ' ')	//skip whitespace
-					i++;
-				//get the bmp name for the water
-				for(j = 0; temp[i] != ' '; j++, i++)
-					param1[j] = temp[i];
-				param1[j] = '\0';
-				
-				//scan for water height and amount of oscillation
-				sscanf(temp + sizeof(char)*i, "%f %f", &waterHeight, &waterOsc);
-				
-				if(waterExists = loadTextures(param1, 1))
-					printf("DONE\n");	//load texture
-				else
-					printf("FAILED\n\t\tCould not open texture: %s\n", param1);
-				readWater = 1;
-			}
-			else
-				printf("FAILED\n\t\tAlready read water values!\n");
-		}
-		else if (strcmp(keyword, "SUN") == 0)
-		{
-			if(readSun == 0)
-			{
-				printf("	Loading sun texture 1 . . . . ");
-				while(temp[i] == ' ')	//skip whitespace
-					i++;
-				//get bmp name for first sun
-				for(j = 0; temp[i] != ' '; j++, i++)
-					param1[j] = temp[i];
-				param1[j] = '\0';
-				
-				while(temp[i] == ' ')	//skip whitespace
-					i++;
-				//get bmp name for second sun
-				for(j = 0; temp[i] != ' ' && temp[i] != '\n' && i < (int)strlen(temp); j++, i++)
-					param2[j] = temp[i];
-				param2[j] = '\0';
-				
-				sun1Exists = loadTextures(param1, 3);	//load texture
-				if(sun1Exists)
-				{
-					printf("DONE\n");
-					whichSun = 3;
-				}
-				else
-					printf("FAILED\n\t\tCould not open sun: %s", param1);
-				
-				printf("	Loading sun texture 2 . . . . ");
-				sun2Exists = loadTextures(param2, 4);	//load texture
-				if(sun2Exists)
-				{
-					printf("DONE\n");
-					whichSun = 4;
-				}
-				else
-					printf("FAILED\n\t\tCould not open sun: %s", param2);
+      //gets the second parameter, the object's name
+      while(temp[i] == ' ')
+        i++;
+      for(j = 0; temp[i] != ' '; j++, i++)
+        param2[j] = temp[i];
+      param2[j] = '\0';
 
-				readSun = 1;
-			}
-			else
-				printf("	Loading sun texture 1 . . . . FAILED\n\t\tAlready read sun textures!\n");
-		}
-		else if (strcmp(keyword, "RING") == 0)
-		{
-			printf("	Loading ring  . . . . . . . . ");
+      //scans the string for the object's x and z values
+      //note that the first parameter is objz since in the pdf
+      //it is described as "column, row", and when reading in
+      //from the .pgm file, I define rows as marked by x and
+      //columns as marked by y
+      sscanf(temp + sizeof(char)*i, "%d %d", &objz, &objx);
 
-			while(temp[i] == ' ') //skip whitespace
-				i++;
+      //inserts the object into the linked list
+      if(strcmp(param1, "Static") == 0)
+      {
+        printf("	Loading static object . . . . ");
+        if(objx > map->height || objz > map->width)
+          printf("FAILED\n\t\tObject outside of terrain\n");
+        else
+          objInsert(STATIC, param2, objx, objz);
+      }
+      else if(strcmp(param1, "Animated") == 0)
+      {
+        printf("	Loading animated object . . . ");
+        if(objx > map->height || objz > map->width)
+          printf("FAILED\n\t\tObject outside of terrain\n");
+        else
+          objInsert(ANIMATED, param2, objx, objz);
+      }
+    }
+    else if (strcmp(keyword, "BILLBOARD") == 0)
+    {
+      while(temp[i] == ' ')	//skip whitespace
+        i++;
+      for(j = 0; temp[i] != ' '; j++, i++)	//get name of billboard
+        param1[j] = temp[i];
+      param1[j] = '\0';
 
-			sscanf(temp + sizeof(char)*i, "%d %d %d %f %d %f %f", &x, &y, &z, &ang, &num, &sphRad, &rRad);
-			sphereRing ring(x, y, z, ang, num, sphRad, rRad);
-			ring.insert();
+      while(temp[i] == ' ')	//skip whitespace
+        i++;
+      for(j = 0; temp[i] != ' '; j++, i++)	//get filename of billboard
+        param2[j]= temp[i];
+      param2[j] = '\0';
 
-			printf("DONE\n");
-		}
-		status = TRUE;
-	}
+      k = 0;
+      //get all the x/z coordinates
+      while(i < (int)strlen(temp))
+      {
+        if(k == MAXBILLBOARDS)	//I set MAXBILLBOARDS to 20
+        {
+          printf("	Warning: maximum billboard limit surpassed!\n");
+          break;
+        }
+        while(temp[i] == ' ' || temp[i] == '\n')	//skip whitespace
+          i++;
+        if(i < (int)strlen(temp))
+        {
+          for(j = 0; temp[i] != ' '; j++, i++)
+            param3[j] = temp[i];
+          param3[j] = '\0';
 
-	printf("Loading complete, executing program\n");
+          while(temp[i] == ' ')
+            i++;
 
-	fclose(f);
+          for(j = 0; temp[i] != ' ' && temp[i] != '\n' && i < (int)strlen(temp); j++, i++)
+            param4[j] = temp[i];
+          param4[j] = '\0';
+
+          //scans z coordinate first then x coordinate for the same reason as objects
+          sscanf(param3, "%d", &bbcoords[k][1]);
+          sscanf(param4, "%d", &bbcoords[k][0]);
+          //if the billboard is outside of the terrain, increase failCount
+          if(bbcoords[k][0] > map->height || bbcoords[k][1] > map->width)
+            failCount++;
+          else
+            k++;
+        }
+      }
+      billboardInsert(param1, param2, bbcoords, k);
+      if(failCount)
+        printf("DONE WITH ERRORS\n\t\tOnly %d of %d billboards loaded!\n\t\t%d billboards outside of terrain\n", k, k + failCount, failCount);
+      else
+        printf("DONE\n");
+    }
+    else if (strcmp(keyword, "SKYDOME") == 0)
+    {
+      printf("	Loading skydome texture . . . ");
+      if(readSky == 0)
+      {	
+        while(temp[i] == ' ')	//skip whitespace
+          i++;
+        //get the bmp name for the skydome
+        for(j = 0; temp[i] != ' '; j++, i++)
+          param1[j] = temp[i];
+        param1[j] = '\0';
+
+        //scan in the rotation angle
+        sscanf(temp + sizeof(char)*i, "%d", &skydomeAngle);
+        angle = skydomeAngle;	//set angle to skydomeAngle, since angle is what's actually going to be increased
+        if(skyExists = loadTextures(param1, 2))
+          printf("DONE\n");	//load texture
+        else
+          printf("FAILED\n\t\tCould not open texture: %s\n", param1);
+
+        readSky = 1;
+      }
+      else
+        printf("FAILED\n\t\tAlready read skydome texture!\n");
+    }
+    else if (strcmp(keyword, "WATER") == 0)
+    {
+      printf("	Loading water texture . . . . ");
+      if(readWater == 0)
+      {
+        while(temp[i] == ' ')	//skip whitespace
+          i++;
+        //get the bmp name for the water
+        for(j = 0; temp[i] != ' '; j++, i++)
+          param1[j] = temp[i];
+        param1[j] = '\0';
+
+        //scan for water height and amount of oscillation
+        sscanf(temp + sizeof(char)*i, "%f %f", &waterHeight, &waterOsc);
+
+        if(waterExists = loadTextures(param1, 1))
+          printf("DONE\n");	//load texture
+        else
+          printf("FAILED\n\t\tCould not open texture: %s\n", param1);
+        readWater = 1;
+      }
+      else
+        printf("FAILED\n\t\tAlready read water values!\n");
+    }
+    else if (strcmp(keyword, "SUN") == 0)
+    {
+      if(readSun == 0)
+      {
+        printf("	Loading sun texture 1 . . . . ");
+        while(temp[i] == ' ')	//skip whitespace
+          i++;
+        //get bmp name for first sun
+        for(j = 0; temp[i] != ' '; j++, i++)
+          param1[j] = temp[i];
+        param1[j] = '\0';
+
+        while(temp[i] == ' ')	//skip whitespace
+          i++;
+        //get bmp name for second sun
+        for(j = 0; temp[i] != ' ' && temp[i] != '\n' && i < (int)strlen(temp); j++, i++)
+          param2[j] = temp[i];
+        param2[j] = '\0';
+
+        sun1Exists = loadTextures(param1, 3);	//load texture
+        if(sun1Exists)
+        {
+          printf("DONE\n");
+          whichSun = 3;
+        }
+        else
+          printf("FAILED\n\t\tCould not open sun: %s", param1);
+
+        printf("	Loading sun texture 2 . . . . ");
+        sun2Exists = loadTextures(param2, 4);	//load texture
+        if(sun2Exists)
+        {
+          printf("DONE\n");
+          whichSun = 4;
+        }
+        else
+          printf("FAILED\n\t\tCould not open sun: %s", param2);
+
+        readSun = 1;
+      }
+      else
+        printf("	Loading sun texture 1 . . . . FAILED\n\t\tAlready read sun textures!\n");
+    }
+    else if (strcmp(keyword, "RING") == 0)
+    {
+      printf("	Loading ring  . . . . . . . . ");
+
+      while(temp[i] == ' ') //skip whitespace
+        i++;
+
+      sscanf(temp + sizeof(char)*i, "%d %d %d %f %d %f %f", &x, &y, &z, &ang, &num, &sphRad, &rRad);
+      SphereRing ring(x, y, z, ang, num, sphRad, rRad);
+      ring.insert();
+
+      printf("DONE\n");
+    }
+  }
+
+  printf("Loading complete, executing program\n");
+
+  fclose(f);
 }
 
 void quit()
 {
-	int i, j;
+  int i, j;
 
-	free(objectList);
-	for(i = 0; i < map->height; i++)
-	{
-		for(j = 0; j < map->width; j++)
-			free(averageNormals[i][j]);
-		free(averageNormals[i]);
-	}
-	free(averageNormals);
-	SDL_Quit();
-	exit(1);
+  free(objectList);
+  for(i = 0; i < map->height; i++)
+  {
+    for(j = 0; j < map->width; j++)
+      free(averageNormals[i][j]);
+    free(averageNormals[i]);
+  }
+  free(averageNormals);
+  SDL_Quit();
+  exit(1);
 }
 
 void getNormal(float *norm,float pointa[3],float pointb[3],float pointc[3])
 {
-	float vect[2][3];	//holds the two vectors that are crossed to get the normal
-	float point[3][3];	//holds the three points passed to getNormal
-	float magnitude;	//for normalizing the vector
-	int i;
+  float vect[2][3];	//holds the two vectors that are crossed to get the normal
+  float point[3][3];	//holds the three points passed to getNormal
+  float magnitude;	//for normalizing the vector
+  int i;
 
-	//puts the points into one array
-	for (i = 0; i < 3; i++)
-	{
-		point[0][i]=pointa[i];
-		point[1][i]=pointb[i]; 
-		point[2][i]=pointc[i];
-	}
+  //puts the points into one array
+  for (i = 0; i < 3; i++)
+  {
+    point[0][i]=pointa[i];
+    point[1][i]=pointb[i]; 
+    point[2][i]=pointc[i];
+  }
 
-	//calculate the two vectors by subtracting one point from the other
-	for (i = 0; i < 3; i++)
-		vect[0][i] = point[1][i] - point[0][i];
-	for (i = 0; i < 3; i++)
-		vect[1][i] = point[2][i] - point[0][i];
+  //calculate the two vectors by subtracting one point from the other
+  for (i = 0; i < 3; i++)
+    vect[0][i] = point[1][i] - point[0][i];
+  for (i = 0; i < 3; i++)
+    vect[1][i] = point[2][i] - point[0][i];
 
-	//norm represents the cross product which I already calculated out using
-	//the determinant of a matrix
-	norm[0] = vect[0][1]*vect[1][2] - vect[0][2]*vect[1][1];
-	norm[1] = vect[0][2]*vect[1][0] - vect[0][0]*vect[1][2];
-	norm[2] = vect[0][0]*vect[1][1] - vect[0][1]*vect[1][0];
+  //norm represents the cross product which I already calculated out using
+  //the determinant of a matrix
+  norm[0] = vect[0][1]*vect[1][2] - vect[0][2]*vect[1][1];
+  norm[1] = vect[0][2]*vect[1][0] - vect[0][0]*vect[1][2];
+  norm[2] = vect[0][0]*vect[1][1] - vect[0][1]*vect[1][0];
 
-	//normalize the normal vector
-	magnitude = sqrt(pow(norm[0],2) + pow(norm[1],2) + pow(norm[2],2));
+  //normalize the normal vector
+  magnitude = sqrt(pow(norm[0],2) + pow(norm[1],2) + pow(norm[2],2));
 
-	for (i = 0; i < 3; i++)
-		norm[i] /= magnitude;
+  for (i = 0; i < 3; i++)
+    norm[i] /= magnitude;
 }
 
 //I chose to average the normals to achieve a better lighting effect
 void averageNormal()
 {
-	int i, j, k;
-	float magnitude;
-	//averages the normals for each vertex
-	for(i = 0; i < map->height; i++)
-	{
-		for(j = 0; j < map->width; j++)
-		{
+  int i, j, k;
+  float magnitude;
+  //averages the normals for each vertex
+  for(i = 0; i < map->height; i++)
+  {
+    for(j = 0; j < map->width; j++)
+    {
 
-			//the first three if/ else if statements are for the edges, which don't require
-			//averaging the normals of the surrounding 4 quads, since there aren't 4 surrounding quads
-			if(i == 0 && j == 0)
-			{
-				averageNormals[i][j][0] = normals[0][0][0];
-				averageNormals[i][j][1] = normals[0][0][1];
-				averageNormals[i][j][2] = normals[0][0][2];
-			}
-			else if(i == 0 && j != 0)
-			{
-				averageNormals[i][j][0] = normals[0][j-1][0] + normals[0][j][0];
-				averageNormals[i][j][1] = normals[0][j-1][1] + normals[0][j][1];
-				averageNormals[i][j][2] = normals[0][j-1][2] + normals[0][j][2];
-			}
-			else if(i != 0 && j == 0)
-			{
-				averageNormals[i][j][0] = normals[i-1][0][0] + normals[i][0][0];
-				averageNormals[i][j][1] = normals[i-1][0][1] + normals[i][0][1];
-				averageNormals[i][j][2] = normals[i-1][0][2] + normals[i][0][2];
-			}
-			//for the rest of the vertices, average the four surrounding quad normals
-			else
-			{
-				averageNormals[i][j][0] = normals[i-1][j-1][0] + normals[i][j-1][0]
-							 + normals[i-1][j][0] + normals[i][j][0];
-				averageNormals[i][j][1] = normals[i-1][j-1][1] + normals[i][j-1][1]
-							 + normals[i-1][j][1] + normals[i][j][1];
-				averageNormals[i][j][2] = normals[i-1][j-1][2] + normals[i][j-1][2]
-							 + normals[i-1][j][2] + normals[i][j][2];
-			}
+      //the first three if/ else if statements are for the edges, which don't require
+      //averaging the normals of the surrounding 4 quads, since there aren't 4 surrounding quads
+      if(i == 0 && j == 0)
+      {
+        averageNormals[i][j][0] = normals[0][0][0];
+        averageNormals[i][j][1] = normals[0][0][1];
+        averageNormals[i][j][2] = normals[0][0][2];
+      }
+      else if(i == 0 && j != 0)
+      {
+        averageNormals[i][j][0] = normals[0][j-1][0] + normals[0][j][0];
+        averageNormals[i][j][1] = normals[0][j-1][1] + normals[0][j][1];
+        averageNormals[i][j][2] = normals[0][j-1][2] + normals[0][j][2];
+      }
+      else if(i != 0 && j == 0)
+      {
+        averageNormals[i][j][0] = normals[i-1][0][0] + normals[i][0][0];
+        averageNormals[i][j][1] = normals[i-1][0][1] + normals[i][0][1];
+        averageNormals[i][j][2] = normals[i-1][0][2] + normals[i][0][2];
+      }
+      //for the rest of the vertices, average the four surrounding quad normals
+      else
+      {
+        averageNormals[i][j][0] = normals[i-1][j-1][0] + normals[i][j-1][0]
+        + normals[i-1][j][0] + normals[i][j][0];
+        averageNormals[i][j][1] = normals[i-1][j-1][1] + normals[i][j-1][1]
+        + normals[i-1][j][1] + normals[i][j][1];
+        averageNormals[i][j][2] = normals[i-1][j-1][2] + normals[i][j-1][2]
+        + normals[i-1][j][2] + normals[i][j][2];
+      }
 
-			//normalize the average normal vector
-			magnitude = sqrt(pow(averageNormals[i][j][0],2) + 
-							pow(averageNormals[i][j][1],2) + pow(averageNormals[i][j][2],2));
-			for (k = 0; k < 3; k++)
-				averageNormals[i][j][k] /= magnitude;
-		}
-	}
+      //normalize the average normal vector
+      magnitude = sqrt(pow(averageNormals[i][j][0],2) + 
+        pow(averageNormals[i][j][1],2) + pow(averageNormals[i][j][2],2));
+      for (k = 0; k < 3; k++)
+        averageNormals[i][j][k] /= magnitude;
+    }
+  }
 }
 
 void drawObjects()
 {
-	int i;
-	glDisable(GL_TEXTURE_2D); //I was told to disable textures for objects, even though they have texture coordinates
+  int i;
+  glDisable(GL_TEXTURE_2D); //I was told to disable textures for objects, even though they have texture coordinates
 
-	//draws each object
-	for(ob = first->next, i = 0; ob != last; ob = ob->next, i++)
-	{
-		glPushMatrix();
-		glTranslatef((ob->xpos - 1)*XLEN, 
-			map->grayValues[ob->xpos-1][ob->zpos-1] - (ob->minHeight - .001)*scaleFactor, (ob->zpos - 1)*ZLEN);
-		glScalef(scaleFactor, scaleFactor, scaleFactor);
+  //draws each object
+  for(ob = first->next, i = 0; ob != last; ob = ob->next, i++)
+  {
+    glPushMatrix();
+    glTranslatef((ob->xpos - 1)*XLEN, 
+      map->grayValues[ob->xpos-1][ob->zpos-1] - (ob->minHeight - .001)*scaleFactor, (ob->zpos - 1)*ZLEN);
+    glScalef(scaleFactor, scaleFactor, scaleFactor);
 
-		glCallList(objectList[i] + ob->Counter/animationSpeed);
+    glCallList(objectList[i] + ob->Counter/animationSpeed);
 
-		//if the object is static, ob->Counter is 0, so it will always draw the same object, but if it is
-		//animated, I use integer division to modify when the next object in the animation is drawn.  By
-		//increasing animationSpeed, it takes more renders for ob->Counter/animationSpeed to actually increase.
-		//Also, the CallList is sequential, as when it's an animated object, I call for a group of sequential lists,
-		//based on how many files are loaded in the animation.
-		ob->Counter++;
-		if(ob->Counter > animationSpeed*ob->fileCount - 1)
-			ob->Counter = 0;
-		glPopMatrix();
-	}
+    //if the object is static, ob->Counter is 0, so it will always draw the same object, but if it is
+    //animated, I use integer division to modify when the next object in the animation is drawn.  By
+    //increasing animationSpeed, it takes more renders for ob->Counter/animationSpeed to actually increase.
+    //Also, the CallList is sequential, as when it's an animated object, I call for a group of sequential lists,
+    //based on how many files are loaded in the animation.
+    ob->Counter++;
+    if(ob->Counter > animationSpeed*ob->fileCount - 1)
+      ob->Counter = 0;
+    glPopMatrix();
+  }
 }
 
 void drawObjectList(obj *curObject, int frame)
 {
-	int i;
+  int i;
 
-	//draws the triangles for every line in the .mod file
-	glBegin(GL_TRIANGLES);
-	for(i = 0; i < curObject->modLines[frame]; i++)
-	{
-		glNormal3f(curObject->values[frame][i][0], curObject->values[frame][i][1], 
-			curObject->values[frame][i][2]);
-		//Guess I don't need to call texture coordinates if there is no texture :D
-		//glTexCoord2f(curObject->values[frame][i][3], curObject->values[frame][i][4]);
-		glVertex3f(curObject->values[frame][i][5], curObject->values[frame][i][6], 
-			curObject->values[frame][i][7]);
-	}
-	glEnd();
+  //draws the triangles for every line in the .mod file
+  glBegin(GL_TRIANGLES);
+  for(i = 0; i < curObject->modLines[frame]; i++)
+  {
+    glNormal3f(curObject->values[frame][i][0], curObject->values[frame][i][1], 
+      curObject->values[frame][i][2]);
+    //Guess I don't need to call texture coordinates if there is no texture :D
+    //glTexCoord2f(curObject->values[frame][i][3], curObject->values[frame][i][4]);
+    glVertex3f(curObject->values[frame][i][5], curObject->values[frame][i][6], 
+      curObject->values[frame][i][7]);
+  }
+  glEnd();
 }
 
 void drawBillboards()
 {
-	int k;
-	float angle;
-	float lookAt[2]; //vector between the camera and the billboard, projected to the xz axis
+  int k;
+  float angle;
+  float lookAt[2]; //vector between the camera and the billboard, projected to the xz axis
 
-	glEnable(GL_TEXTURE_2D);
-	
-	//draws all the billboards
-	for(bb = firstBillboard->next; bb!= lastBillboard; bb = bb->next)
-	{
-		glBindTexture(GL_TEXTURE_2D, texture[bb->texNumber]);
+  glEnable(GL_TEXTURE_2D);
 
-		//draws each billboard from the line in the env. file
-		for(k = 0; k < bb->numOfBoards; k++)
-		{
-			//gets the vector between the camera and the billboard, and calculates the angle
-			lookAt[0] = (bb->xpos[k] - 1)*XLEN - player.getX(); //x component of lookAt vector
-			lookAt[1] = (bb->zpos[k] - 1)*ZLEN - player.getZ(); //z component of lookAt vector
-			angle = atan(lookAt[0]/lookAt[1])*180/PI;
+  //draws all the billboards
+  for(bb = firstBillboard->next; bb!= lastBillboard; bb = bb->next)
+  {
+    glBindTexture(GL_TEXTURE_2D, texture[bb->texNumber]);
 
-			//this takes care of sign issues
-			if (player.getZ() > (bb->zpos[k] - 1)*ZLEN)
-				angle = 180 + angle;
-			
-			//move the billboard into position and scales it
-			glPushMatrix();
-			glTranslatef((bb->xpos[k] - 1)*XLEN, map->grayValues[bb->xpos[k] - 1][bb->zpos[k] - 1],
-				(bb->zpos[k] - 1)*ZLEN);
-			glScalef(scaleFactor, scaleFactor, scaleFactor);
-			//note that the rotation angle is such that the billboard isn't facing straight at you, but at
-			//a 45 degree angle, and two such rectangles are used.  It kind of looks like: viewer---->X
-			//where the X represents the two crossing billboards and the arrow is the line of sight.
-			glRotatef(angle + 45, 0, 1, 0);
+    //draws each billboard from the line in the env. file
+    for(k = 0; k < bb->numOfBoards; k++)
+    {
+      //gets the vector between the camera and the billboard, and calculates the angle
+      lookAt[0] = (bb->xpos[k] - 1)*XLEN - player.getX(); //x component of lookAt vector
+      lookAt[1] = (bb->zpos[k] - 1)*ZLEN - player.getZ(); //z component of lookAt vector
+      angle = atan(lookAt[0]/lookAt[1])*180/PI;
 
-			//draw the first rectangle, I have the rectangles be essentially the size of the quad
-			glBegin(GL_QUADS);
-			glTexCoord2f(1.0f, 0.0f);
-			glNormal3f(0, 0, -1);
-			glVertex3f(-(float)XLEN/2, 0, 0);
+      //this takes care of sign issues
+      if (player.getZ() > (bb->zpos[k] - 1)*ZLEN)
+        angle = 180 + angle;
 
-			glTexCoord2f(1.0f, 1.0f);
-			glVertex3f(-(float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
+      //move the billboard into position and scales it
+      glPushMatrix();
+      glTranslatef((bb->xpos[k] - 1)*XLEN, map->grayValues[bb->xpos[k] - 1][bb->zpos[k] - 1],
+        (bb->zpos[k] - 1)*ZLEN);
+      glScalef(scaleFactor, scaleFactor, scaleFactor);
+      //note that the rotation angle is such that the billboard isn't facing straight at you, but at
+      //a 45 degree angle, and two such rectangles are used.  It kind of looks like: viewer---->X
+      //where the X represents the two crossing billboards and the arrow is the line of sight.
+      glRotatef(angle + 45, 0, 1, 0);
 
-			glTexCoord2f(0.0f, 1.0f);
-			glVertex3f((float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
+      //draw the first rectangle, I have the rectangles be essentially the size of the quad
+      glBegin(GL_QUADS);
+      glTexCoord2f(1.0f, 0.0f);
+      glNormal3f(0, 0, -1);
+      glVertex3f(-(float)XLEN/2, 0, 0);
 
-			glTexCoord2f(0.0f, 0.0f);
-			glVertex3f((float)XLEN/2, 0, 0);
-			glEnd();
+      glTexCoord2f(1.0f, 1.0f);
+      glVertex3f(-(float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
 
-			//rotate and draw the second rectangle
-			glRotatef(-90, 0, 1, 0);
-			glBegin(GL_QUADS);
-			glTexCoord2f(1.0f, 0.0f);
-			glVertex3f(-(float)XLEN/2, 0, 0);
-			glTexCoord2f(1.0f, 1.0f);
-			glVertex3f(-(float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
-			glTexCoord2f(0.0f, 1.0f);
-			glVertex3f((float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
-			glTexCoord2f(0.0f, 0.0f);
-			glVertex3f((float)XLEN/2, 0, 0);
-			glEnd();
-			glPopMatrix();
-		}
-	}
-	glDisable(GL_TEXTURE_2D);
+      glTexCoord2f(0.0f, 1.0f);
+      glVertex3f((float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
+
+      glTexCoord2f(0.0f, 0.0f);
+      glVertex3f((float)XLEN/2, 0, 0);
+      glEnd();
+
+      //rotate and draw the second rectangle
+      glRotatef(-90, 0, 1, 0);
+      glBegin(GL_QUADS);
+      glTexCoord2f(1.0f, 0.0f);
+      glVertex3f(-(float)XLEN/2, 0, 0);
+      glTexCoord2f(1.0f, 1.0f);
+      glVertex3f(-(float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
+      glTexCoord2f(0.0f, 1.0f);
+      glVertex3f((float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
+      glTexCoord2f(0.0f, 0.0f);
+      glVertex3f((float)XLEN/2, 0, 0);
+      glEnd();
+      glPopMatrix();
+    }
+  }
+  glDisable(GL_TEXTURE_2D);
 }
 
 void drawTerrain()
 {
-	if(textureExists)
-		glEnable(GL_TEXTURE_2D);
-	else
-		glDisable(GL_TEXTURE_2D);
+  if(textureExists)
+    glEnable(GL_TEXTURE_2D);
+  else
+    glDisable(GL_TEXTURE_2D);
 
-	glCallList(terrainList);
+  glCallList(terrainList);
 
-	glDisable(GL_TEXTURE_2D);
+  glDisable(GL_TEXTURE_2D);
 }
 
 void drawTerrainList()
 {
-	int x, z;
-	
-	//begin drawing the terrain
-	glBegin(GL_QUADS);
-	//for each quad, the normal vector is set, and depending on the existance of a texture,
-	//either the texture coordinate or color coordinate is set, followed by the vertex itself
-    for (x = 0; x < map->height - 1; x++)
-    {
-        for (z = 0; z < map->width - 1; z++)
-        {			
-            // draw vertex 0
-			glNormal3fv(averageNormals[x][z]);
-			if(!textureExists)
-				glColor3f(0, 0, (map->grayValues[x][z] - minHeight)/(maxHeight - minHeight));
-			else
-			{
-				if(tileTerrain == STRETCHED)
-					glTexCoord2f((float)x/map->height, (float)z/map->width);
-				else
-					glTexCoord2f(0.0f, 0.0f);
-			}
-            glVertex3f(x*XLEN, map->grayValues[x][z], z*ZLEN);
+  int x, z;
 
-            // draw vertex 1
-			glNormal3fv(averageNormals[x][z+1]);
-			if(!textureExists)
-				glColor3f(0, 0, (map->grayValues[x][z+1] - minHeight)/(maxHeight - minHeight));
-			else
-			{
-				if(tileTerrain == STRETCHED)
-					glTexCoord2f((float)x/map->height, (float)(z+1)/map->width);
-				else
-					glTexCoord2f(0.0f, 1.0f);
-			}
-            glVertex3f(x*XLEN, map->grayValues[x][z+1], (z+1)*ZLEN);
+  //begin drawing the terrain
+  glBegin(GL_QUADS);
+  //for each quad, the normal vector is set, and depending on the existance of a texture,
+  //either the texture coordinate or color coordinate is set, followed by the vertex itself
+  for (x = 0; x < map->height - 1; x++)
+  {
+    for (z = 0; z < map->width - 1; z++)
+    {			
+      // draw vertex 0
+      glNormal3fv(averageNormals[x][z]);
+      if(!textureExists)
+        glColor3f(0, 0, (map->grayValues[x][z] - minHeight)/(maxHeight - minHeight));
+      else
+      {
+        if(tileTerrain == STRETCHED)
+          glTexCoord2f((float)x/map->height, (float)z/map->width);
+        else
+          glTexCoord2f(0.0f, 0.0f);
+      }
+      glVertex3f(x*XLEN, map->grayValues[x][z], z*ZLEN);
 
-            // draw vertex 2
-			glNormal3fv(averageNormals[x+1][z+1]);
-			if(!textureExists)
-				glColor3f(0, 0, (map->grayValues[x+1][z+1] - minHeight)/(maxHeight - minHeight));
-			else
-			{
-				if(tileTerrain == STRETCHED)
-					glTexCoord2f((float)(x+1)/map->height, (float)(z+1)/map->width);
-				else
-					glTexCoord2f(1.0f, 1.0f);
-			}
-            glVertex3f((x+1)*XLEN, map->grayValues[x+1][z+1], (z+1)*ZLEN);
+      // draw vertex 1
+      glNormal3fv(averageNormals[x][z+1]);
+      if(!textureExists)
+        glColor3f(0, 0, (map->grayValues[x][z+1] - minHeight)/(maxHeight - minHeight));
+      else
+      {
+        if(tileTerrain == STRETCHED)
+          glTexCoord2f((float)x/map->height, (float)(z+1)/map->width);
+        else
+          glTexCoord2f(0.0f, 1.0f);
+      }
+      glVertex3f(x*XLEN, map->grayValues[x][z+1], (z+1)*ZLEN);
 
-            // draw vertex 3
-			glNormal3fv(averageNormals[x+1][z]);
-			if(!textureExists)
-				glColor3f(0, 0, (map->grayValues[x+1][z] - minHeight)/(maxHeight - minHeight));
-			else
-			{
-				if(tileTerrain == STRETCHED)
-					glTexCoord2f((float)(x+1)/map->height, (float)z/map->width);
-				else
-					glTexCoord2f(1.0f, 0.0f);
-			}
-            glVertex3f((x+1)*XLEN, map->grayValues[x+1][z], z*ZLEN);
-        }
+      // draw vertex 2
+      glNormal3fv(averageNormals[x+1][z+1]);
+      if(!textureExists)
+        glColor3f(0, 0, (map->grayValues[x+1][z+1] - minHeight)/(maxHeight - minHeight));
+      else
+      {
+        if(tileTerrain == STRETCHED)
+          glTexCoord2f((float)(x+1)/map->height, (float)(z+1)/map->width);
+        else
+          glTexCoord2f(1.0f, 1.0f);
+      }
+      glVertex3f((x+1)*XLEN, map->grayValues[x+1][z+1], (z+1)*ZLEN);
+
+      // draw vertex 3
+      glNormal3fv(averageNormals[x+1][z]);
+      if(!textureExists)
+        glColor3f(0, 0, (map->grayValues[x+1][z] - minHeight)/(maxHeight - minHeight));
+      else
+      {
+        if(tileTerrain == STRETCHED)
+          glTexCoord2f((float)(x+1)/map->height, (float)z/map->width);
+        else
+          glTexCoord2f(1.0f, 0.0f);
+      }
+      glVertex3f((x+1)*XLEN, map->grayValues[x+1][z], z*ZLEN);
     }
-	glEnd();
+  }
+  glEnd();
 }
 
 void drawWater()
 {
-	float sign;
+  float sign;
 
-	//sign tells you whether or not you are above or under the water,
-	//I use it to show the water level when below the water
-	sign = (player.getY() - waterHeight)/fabs((player.getY() - waterHeight));
-	
-	glColor4f(1.0f, 1.0f, 1.0f, 0.4f);	//basically sets alpha level to .4
-	glNormal3f(0.0, sign, 0.0);		//normal depends on whether you are above or below water
+  //sign tells you whether or not you are above or under the water,
+  //I use it to show the water level when below the water
+  sign = (player.getY() - waterHeight)/fabs((player.getY() - waterHeight));
 
-	glEnable(GL_TEXTURE_2D);
-	glDisable(GL_CULL_FACE);
+  glColor4f(1.0f, 1.0f, 1.0f, 0.4f);	//basically sets alpha level to .4
+  glNormal3f(0.0, sign, 0.0);		//normal depends on whether you are above or below water
 
-	glPushMatrix();
-	glTranslatef(0, waterHeight, 0);
-/*
-	glBegin(GL_QUADS);
-	glTexCoord2f(0.0, 0.0);
-	glVertex3f(0, 0, 0);
-	glTexCoord2f(0.0, 1.0);
-	glVertex3f(0, 0, map->width*ZLEN);
-	glTexCoord2f(1.0, 1.0);
-	glVertex3f(map->height*XLEN, 0, map->width*ZLEN);
-	glTexCoord2f(1.0, 0.0);
-	glVertex3f(map->height*XLEN, 0, 0);
-	glEnd();
+  glEnable(GL_TEXTURE_2D);
+  glDisable(GL_CULL_FACE);
 
-*/	
-	glCallList(waterList);
+  glPushMatrix();
+  glTranslatef(0, waterHeight, 0);
+  /*
+  glBegin(GL_QUADS);
+  glTexCoord2f(0.0, 0.0);
+  glVertex3f(0, 0, 0);
+  glTexCoord2f(0.0, 1.0);
+  glVertex3f(0, 0, map->width*ZLEN);
+  glTexCoord2f(1.0, 1.0);
+  glVertex3f(map->height*XLEN, 0, map->width*ZLEN);
+  glTexCoord2f(1.0, 0.0);
+  glVertex3f(map->height*XLEN, 0, 0);
+  glEnd();
 
-	glPopMatrix();
-	//calculates water oscillation
-	if (waterHeight > waterHeightMax || waterHeight < waterHeightMin)
-		waterSign *= -1;
-	waterHeight += waterSign*waterOsc/waterSpeed;
-	glEnable(GL_CULL_FACE);
-	glDisable(GL_TEXTURE_2D);
+  */	
+  glCallList(waterList);
+
+  glPopMatrix();
+  //calculates water oscillation
+  if (waterHeight > waterHeightMax || waterHeight < waterHeightMin)
+    waterSign *= -1;
+  waterHeight += waterSign*waterOsc/waterSpeed;
+  glEnable(GL_CULL_FACE);
+  glDisable(GL_TEXTURE_2D);
 }
 
 //called in myinit to set up the call list for water
 void drawWaterList()
 {
-	int x, z;
+  int x, z;
 
-	glBegin(GL_QUADS);
-	for (x = 0; x < map->height - 1; x++)
-	{
-	    for (z = 0; z < map->width - 1; z++)
-		{
-			// draw vertex 0
-			glTexCoord2f(0.0f, 0.0f);
-			glVertex3f(x*XLEN, 0, z*ZLEN);
-			// draw vertex 1
-			glTexCoord2f(0.0f, 1.0f);
-			glVertex3f(x*XLEN, 0, (z+1)*ZLEN);
-			// draw vertex 2
-			glTexCoord2f(1.0f, 1.0f);
-			glVertex3f((x+1)*XLEN, 0, (z+1)*ZLEN);
-			// draw vertex 3
-			glTexCoord2f(1.0f, 0.0f);
-			glVertex3f((x+1)*XLEN, 0, z*ZLEN);
-		}
-	}
-	glEnd();
+  glBegin(GL_QUADS);
+  for (x = 0; x < map->height - 1; x++)
+  {
+    for (z = 0; z < map->width - 1; z++)
+    {
+      // draw vertex 0
+      glTexCoord2f(0.0f, 0.0f);
+      glVertex3f(x*XLEN, 0, z*ZLEN);
+      // draw vertex 1
+      glTexCoord2f(0.0f, 1.0f);
+      glVertex3f(x*XLEN, 0, (z+1)*ZLEN);
+      // draw vertex 2
+      glTexCoord2f(1.0f, 1.0f);
+      glVertex3f((x+1)*XLEN, 0, (z+1)*ZLEN);
+      // draw vertex 3
+      glTexCoord2f(1.0f, 0.0f);
+      glVertex3f((x+1)*XLEN, 0, z*ZLEN);
+    }
+  }
+  glEnd();
 }
 
 void drawSkySphere()
 {
-	GLUquadricObj *quadratic;	// Storage For Our Quadratic Objects ( NEW )
+  GLUquadricObj *quadratic;	// Storage For Our Quadratic Objects ( NEW )
 
-	GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
-	glEnable(GL_TEXTURE_2D);
+  GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
+  glEnable(GL_TEXTURE_2D);
 
-	glColor3f(1, 1, 1);
+  glColor3f(1, 1, 1);
 
-	//translation makes the skydome center the center of the map
-	glPushMatrix();
-	glTranslatef(map->height * XLEN/2, 0.5*(maxHeight - minHeight), map->width * ZLEN/2);
-	glRotatef((float)angle/skySpeed, 0, 1, 0);
-	angle += skydomeAngle;
-	if (angle > 360*skySpeed)		//prevents the angle value from spiraling out of control!
-		angle -= 360*skySpeed;
+  //translation makes the skydome center the center of the map
+  glPushMatrix();
+  glTranslatef(map->height * XLEN/2, 0.5*(maxHeight - minHeight), map->width * ZLEN/2);
+  glRotatef((float)angle/skySpeed, 0, 1, 0);
+  angle += skydomeAngle;
+  if (angle > 360*skySpeed)		//prevents the angle value from spiraling out of control!
+    angle -= 360*skySpeed;
 
-	glDisable(GL_CULL_FACE);
-	glDisable(GL_LIGHTING);
-	
-	glBindTexture(GL_TEXTURE_2D, texture[2]);	//texture array is filled before to include the sky texture
-	
-	quadratic=gluNewQuadric();			// Create A Pointer To The Quadric Object (Return 0 If No Memory) (NEW)
+  glDisable(GL_CULL_FACE);
+  glDisable(GL_LIGHTING);
 
-	if (light_enabled) gluQuadricNormals(quadratic, GLU_SMOOTH);	// Create Smooth Normals (NEW)
-	else gluQuadricNormals(quadratic, GLU_NONE);
-	
-	gluQuadricTexture(quadratic, GL_TRUE);				// Create Texture Coords (NEW)
+  glBindTexture(GL_TEXTURE_2D, texture[2]);	//texture array is filled before to include the sky texture
 
-	// Draw A Sphere With given Radius and slice #s, I used
-	// geometry to find the minimum radius such that all four
-	// corners are within the sphere, then doubled it in case
-	// the corners themselves were raised, plus I think it looks better
-	gluSphere(quadratic, skyRadius, 32, 32);
+  quadratic=gluNewQuadric();			// Create A Pointer To The Quadric Object (Return 0 If No Memory) (NEW)
 
-	if (light_enabled) glEnable(GL_LIGHTING);
+  if (light_enabled) gluQuadricNormals(quadratic, GLU_SMOOTH);	// Create Smooth Normals (NEW)
+  else gluQuadricNormals(quadratic, GLU_NONE);
 
-	glEnable(GL_CULL_FACE);
-	glDisable(GL_TEXTURE_2D);
+  gluQuadricTexture(quadratic, GL_TRUE);				// Create Texture Coords (NEW)
 
-	glPopMatrix();
+  // Draw A Sphere With given Radius and slice #s, I used
+  // geometry to find the minimum radius such that all four
+  // corners are within the sphere, then doubled it in case
+  // the corners themselves were raised, plus I think it looks better
+  gluSphere(quadratic, skyRadius, 32, 32);
+
+  if (light_enabled) glEnable(GL_LIGHTING);
+
+  glEnable(GL_CULL_FACE);
+  glDisable(GL_TEXTURE_2D);
+
+  glPopMatrix();
 }
 
 void drawSuns()
 {
-	float lookAt[3];
-	float xzAngle;
-	float yAngle;
-	GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
-	glDisable(GL_CULL_FACE);
-	glDisable(GL_LIGHTING);
-	glEnable(GL_TEXTURE_2D);
+  float lookAt[3];
+  float xzAngle;
+  float yAngle;
+  GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
+  glDisable(GL_CULL_FACE);
+  glDisable(GL_LIGHTING);
+  glEnable(GL_TEXTURE_2D);
 
-	glColor3f(1.0, 1.0, 1.0);
+  glColor3f(1.0, 1.0, 1.0);
 
-	//if both suns exist, only switch suns 1% of the time (otherwise it flickers too much!)
-	if(sun1Exists && sun2Exists)
-	{
-		if(rand()%100 + 1 > 99)
-		{
-			if(whichSun == 3)
-				whichSun = 4;
-			else
-				whichSun = 3;
-		}
-	}
-	glBindTexture(GL_TEXTURE_2D, texture[whichSun]);
+  //if both suns exist, only switch suns 1% of the time (otherwise it flickers too much!)
+  if(sun1Exists && sun2Exists)
+  {
+    if(rand()%100 + 1 > 99)
+    {
+      if(whichSun == 3)
+        whichSun = 4;
+      else
+        whichSun = 3;
+    }
+  }
+  glBindTexture(GL_TEXTURE_2D, texture[whichSun]);
 
-	lookAt[0] = map->height*XLEN - player.getX();			//x component of lookAt vector
-	lookAt[1] = 3*(maxHeight - minHeight) - player.getY();	//y component of lookAt vector
-	lookAt[2] = map->width*ZLEN - player.getZ();			//z component of lookAt vector
-	xzAngle = atan(lookAt[0]/lookAt[2])*180/PI;			//calculate angle on xz plane
-	if (player.getZ() > (map->width*ZLEN))					//accounts for sign issues with atan
-		xzAngle += 180;
+  lookAt[0] = map->height*XLEN - player.getX();			//x component of lookAt vector
+  lookAt[1] = 3*(maxHeight - minHeight) - player.getY();	//y component of lookAt vector
+  lookAt[2] = map->width*ZLEN - player.getZ();			//z component of lookAt vector
+  xzAngle = atan(lookAt[0]/lookAt[2])*180/PI;			//calculate angle on xz plane
+  if (player.getZ() > (map->width*ZLEN))					//accounts for sign issues with atan
+    xzAngle += 180;
 
-	//billboarding in the y direction
-	yAngle = atan(lookAt[1]/sqrt(pow(lookAt[0], 2) + pow(lookAt[2], 2)))*180/PI;
-		
-	glPushMatrix();
-	//moves and rotates the sun to have billboarding effect
-	glTranslatef(map->height*XLEN, 3*(maxHeight - minHeight), map->width*ZLEN);
-	glRotatef(xzAngle, 0, 1, 0);
-	glRotatef(yAngle, -1, 0, 0);
+  //billboarding in the y direction
+  yAngle = atan(lookAt[1]/sqrt(pow(lookAt[0], 2) + pow(lookAt[2], 2)))*180/PI;
 
-	//draws the sun so that its size is a function of the map size
-	glBegin(GL_QUADS);
-	glTexCoord2f(0.0, 0.0);
-	glVertex3f(.2*map->height*XLEN,  -.2*map->height*XLEN, 0);
+  glPushMatrix();
+  //moves and rotates the sun to have billboarding effect
+  glTranslatef(map->height*XLEN, 3*(maxHeight - minHeight), map->width*ZLEN);
+  glRotatef(xzAngle, 0, 1, 0);
+  glRotatef(yAngle, -1, 0, 0);
 
-	glTexCoord2f(1.0, 0.0);
-	glVertex3f(-.2*map->height*XLEN, -.2*map->height*XLEN, 0);
+  //draws the sun so that its size is a function of the map size
+  glBegin(GL_QUADS);
+  glTexCoord2f(0.0, 0.0);
+  glVertex3f(.2*map->height*XLEN,  -.2*map->height*XLEN, 0);
 
-	glTexCoord2f(1.0, 1.0);
-	glVertex3f(-.2*map->height*XLEN, .2*map->height*XLEN, 0);
+  glTexCoord2f(1.0, 0.0);
+  glVertex3f(-.2*map->height*XLEN, -.2*map->height*XLEN, 0);
 
-	glTexCoord2f(0.0, 1.0);
-	glVertex3f(.2*map->height*XLEN, .2*map->height*XLEN, 0);
-	glEnd();
-	glEnable(GL_CULL_FACE);
-	if (light_enabled) 
-		glEnable(GL_LIGHTING);
-	glPopMatrix();
+  glTexCoord2f(1.0, 1.0);
+  glVertex3f(-.2*map->height*XLEN, .2*map->height*XLEN, 0);
 
-	glDisable(GL_TEXTURE_2D);
+  glTexCoord2f(0.0, 1.0);
+  glVertex3f(.2*map->height*XLEN, .2*map->height*XLEN, 0);
+  glEnd();
+  glEnable(GL_CULL_FACE);
+  if (light_enabled) 
+    glEnable(GL_LIGHTING);
+  glPopMatrix();
+
+  glDisable(GL_TEXTURE_2D);
 }
 
 void drawRings()
 {
-	sphereRing::ringsPassed = 0;
-	
-	for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
-	{
-		sphRing->drawRing(FPS);
-		if(sphRing->isPassed())
-			sphereRing::ringsPassed++;
-	}
+  SphereRing::ringsPassed = 0;
+
+  for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
+  {
+    sphRing->drawRing(FPS);
+    if(sphRing->isPassed())
+      SphereRing::ringsPassed++;
+  }
 }
 
 void drawBox()
 {
-	if(glIsEnabled(GL_LIGHTING))
-		glCallList(lightList[6]);
-	omgbox.draw(FPS);
-
+  if(glIsEnabled(GL_LIGHTING))
+    glCallList(lightList[6]);
+  box.draw(FPS);
 }
 
 //sets fog parameters, is called in myinit()
 void drawFog()
 {
-	GLuint	fogMode  [ ] = { GL_EXP, GL_EXP2, GL_LINEAR };	// Storage For Three Types Of Fog
-	GLfloat	fogColor [4] = {0.8519f, 0.8588f, 0.8882f, 1}; 
+  GLuint	fogMode  [ ] = { GL_EXP, GL_EXP2, GL_LINEAR };	// Storage For Three Types Of Fog
+  GLfloat	fogColor [4] = {0.8519f, 0.8588f, 0.8882f, 1}; 
 
-	glFogi(GL_FOG_MODE, fogMode[2]);		// Fog Mode
-	glFogfv(GL_FOG_COLOR, fogColor);		// Set Fog Color
-	glFogf(GL_FOG_DENSITY, 0.01f);			// How Dense Will The Fog Be
-	glHint(GL_FOG_HINT, GL_NICEST);			// Fog Hint Value
-	glFogf(GL_FOG_START, 0);				// Fog Start
-	glFogf(GL_FOG_END  , skyRadius);		// Fog End
+  glFogi(GL_FOG_MODE, fogMode[2]);		// Fog Mode
+  glFogfv(GL_FOG_COLOR, fogColor);		// Set Fog Color
+  glFogf(GL_FOG_DENSITY, 0.01f);			// How Dense Will The Fog Be
+  glHint(GL_FOG_HINT, GL_NICEST);			// Fog Hint Value
+  glFogf(GL_FOG_START, 0);				// Fog Start
+  glFogf(GL_FOG_END  , skyRadius);		// Fog End
 }
 
 //sets the material properties for lighting
 void setLight(light_t light)
 {
-	glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_AMBIENT, light.ambient );
-	glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_DIFFUSE, light.diffuse );
-	glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_SPECULAR, light.specular );
-	glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_SPECULAR, light.emission );
-	glMaterialf ( GL_FRONT/*_AND_BACK*/, GL_SHININESS, light.shininess );
+  glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_AMBIENT, light.ambient );
+  glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_DIFFUSE, light.diffuse );
+  glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_SPECULAR, light.specular );
+  glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_SPECULAR, light.emission );
+  glMaterialf ( GL_FRONT/*_AND_BACK*/, GL_SHININESS, light.shininess );
 }
 
 void drawLight()
 {
-	//Position is set in camera function
+  //Position is set in camera function
 
-	//light settings
-	GLfloat LightAmbient[] = {0.5f, 0.5f, 0.5f, 0.5f}; 
-	GLfloat LightDiffuse[] = {1.0f, 1.0f, 1.0f, 1.0f};
-	GLfloat globalAmbient[] = {0.6f, 0.6f, 0.6f, 1.0f};
+  //light settings
+  GLfloat LightAmbient[] = {0.5f, 0.5f, 0.5f, 0.5f}; 
+  GLfloat LightDiffuse[] = {1.0f, 1.0f, 1.0f, 1.0f};
+  GLfloat globalAmbient[] = {0.6f, 0.6f, 0.6f, 1.0f};
 
-	glLightfv(GL_LIGHT0, GL_AMBIENT, LightAmbient);	
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, LightDiffuse);	
+  glLightfv(GL_LIGHT0, GL_AMBIENT, LightAmbient);	
+  glLightfv(GL_LIGHT0, GL_DIFFUSE, LightDiffuse);	
 
-	glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);	
-	glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
+  glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);	
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
 
-	glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT0);
 
-	//disabling this seemed to make the light look better to me, personally
-//	glColorMaterial(GL_FRONT_AND_BACK,GL_DIFFUSE);
-//	glEnable(GL_COLOR_MATERIAL);
-	
-	//I moved this to the camera function to have the light position stay the same
-	//regardless of camera position, etc.
-//	glLightfv(GL_LIGHT0, GL_POSITION,LightPosition);
+  //disabling this seemed to make the light look better to me, personally
+  //	glColorMaterial(GL_FRONT_AND_BACK,GL_DIFFUSE);
+  //	glEnable(GL_COLOR_MATERIAL);
+
+  //I moved this to the camera function to have the light position stay the same
+  //regardless of camera position, etc.
+  //	glLightfv(GL_LIGHT0, GL_POSITION,LightPosition);
 }
 
 void draw2d()
 {
-	GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
+  GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
 
-	//sets up the projection for drawing text on the screen
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-    glLoadIdentity();  
-   	glOrtho(0, width, height, 0, 0, 1);
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-	glLoadIdentity();
-	
-	glDisable(GL_LIGHTING);							//disable light for drawing text
-	glLineWidth(1.0);
-	//reset the matrices
-	glBegin(GL_LINES);
-	glVertex3f(width/2 + 9, (float)height/2, 0.0f);
-	glVertex3f(width/2 - 8, (float)height/2, 0.0f);
-	glVertex3f((float)width/2, height/2 + 8, 0.0f);
-	glVertex3f((float)width/2, height/2 - 9, 0.0f);
-	glEnd();
+  //sets up the projection for drawing text on the screen
+  glMatrixMode(GL_PROJECTION);
+  glPushMatrix();
+  glLoadIdentity();  
+  glOrtho(0, width, height, 0, 0, 1);
+  glMatrixMode(GL_MODELVIEW);
+  glPushMatrix();
+  glLoadIdentity();
 
-	player.jetPack.drawBar();
-	player.healthBar.drawBar();
+  glDisable(GL_LIGHTING);							//disable light for drawing text
+  glLineWidth(1.0);
+  //reset the matrices
+  glBegin(GL_LINES);
+  glVertex3f(width/2 + 9, (float)height/2, 0.0f);
+  glVertex3f(width/2 - 8, (float)height/2, 0.0f);
+  glVertex3f((float)width/2, height/2 + 8, 0.0f);
+  glVertex3f((float)width/2, height/2 - 9, 0.0f);
+  glEnd();
 
-    glPopMatrix();
-	glMatrixMode(GL_PROJECTION);
-	glPopMatrix();
-	glMatrixMode(GL_MODELVIEW);
-	if(light_enabled)
-		glEnable(GL_LIGHTING);
+  player.jetPack.drawBar();
+  player.healthBar.drawBar();
+
+  glPopMatrix();
+  glMatrixMode(GL_PROJECTION);
+  glPopMatrix();
+  glMatrixMode(GL_MODELVIEW);
+  if(light_enabled)
+    glEnable(GL_LIGHTING);
 }
 
 //updates the camera position
 void camera()
 {
-	//updates the light position, making it stationary relative to the terrain
-	GLfloat LightPosition[]= {map->height*XLEN, 5*(maxHeight - minHeight), map->width*ZLEN, 1.0f};
-	glLightfv(GL_LIGHT0, GL_POSITION, LightPosition);
+  //updates the light position, making it stationary relative to the terrain
+  GLfloat LightPosition[]= {map->height*XLEN, 5*(maxHeight - minHeight), map->width*ZLEN, 1.0f};
+  glLightfv(GL_LIGHT0, GL_POSITION, LightPosition);
 
-	player.updatePos();
+  player.updatePos();
 }
 
 float setHeight()
 {
-	int x, z;
-	float d1;
+  int x, z;
+  float d1;
 
-	x = floor(player.getX()/XLEN);
-	z = floor(player.getZ()/ZLEN);
+  x = floor(player.getX()/XLEN);
+  z = floor(player.getZ()/ZLEN);
 
-	if(x == 127)
-		x--;
+  if(x == 127)
+    x--;
 
-	//left triangle
-	if((z + ZLEN - player.getZ()/ZLEN)*(float)XLEN/ZLEN > (x + XLEN - player.getX()/XLEN))
-	{
-		d1 = (map->grayValues[x+1][z+1] - map->grayValues[x+1][z])/ZLEN * (player.getZ()/ZLEN - z)
-			+(map->grayValues[x][z] - map->grayValues[x+1][z])/XLEN * (XLEN - (player.getX()/XLEN - x))
-			+ map->grayValues[x+1][z];
-	}
-	//right triangle
-	else
-	{
-		d1 = (map->grayValues[x][z] - map->grayValues[x][z+1])/ZLEN * (ZLEN - (player.getZ()/ZLEN - z))
-			+(map->grayValues[x+1][z+1] - map->grayValues[x][z+1])/XLEN * (player.getX()/XLEN - x)
-			+ map->grayValues[x][z+1];
-	}
+  //left triangle
+  if((z + ZLEN - player.getZ()/ZLEN)*(float)XLEN/ZLEN > (x + XLEN - player.getX()/XLEN))
+  {
+    d1 = (map->grayValues[x+1][z+1] - map->grayValues[x+1][z])/ZLEN * (player.getZ()/ZLEN - z)
+      +(map->grayValues[x][z] - map->grayValues[x+1][z])/XLEN * (XLEN - (player.getX()/XLEN - x))
+      + map->grayValues[x+1][z];
+  }
+  //right triangle
+  else
+  {
+    d1 = (map->grayValues[x][z] - map->grayValues[x][z+1])/ZLEN * (ZLEN - (player.getZ()/ZLEN - z))
+      +(map->grayValues[x+1][z+1] - map->grayValues[x][z+1])/XLEN * (player.getX()/XLEN - x)
+      + map->grayValues[x][z+1];
+  }
 
-	d1 = d1 + player.getHeight();//6 - crouchFactor;
+  d1 = d1 + player.getHeight();//6 - crouchFactor;
 
-	return d1;
+  return d1;
 }
 
 void jump(float FPS, float terrainHeight, int ringsPassed)
 {
-	jumpFactor += 1/FPS * yVel;
-	yVel += 1/FPS * g;
-	
-	if (jumpFactor <= terrainHeight - jumpHeight)
-	{
-		if(yVel < -100)
-		{
-			player.healthBar.energyDown(FPS, (-yVel - 100)/500);
-		}
-		
-		if(player.healthBar.getLength() == 0)
-		{
-			for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
-			{
-				sphRing->setList(4);
-			}
-			player.healthBar.energyUp(FPS, player.healthBar.getMaxLength());
-			sphereRing::ringsPassed = 0;
-		}
-		if(SDL_GetMouseState(NULL, NULL)&SDL_BUTTON(1))
-		{
-			if(player.jetPack.getLength() != 0)
-				yVel = 10;
-			else
-			{
-				yVel = 0;
-				jumped = 0;
-			}
-		}
-		else
-		{
-			jumped = 0;
-			jumpFactor = terrainHeight - jumpHeight;
-		}
+  jumpFactor += 1/FPS * yVel;
+  yVel += 1/FPS * g;
 
-		if(sphereRing::ringsPassed != sphereRing::numOfRings)
-		{
-			if(sphereRing::ringsPassed > 0)
-				failureSound = 1;
-			for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
-			{
-				sphRing->setList(4);
-			}
-			sphereRing::ringsPassed = 0;
+  if (jumpFactor <= terrainHeight - jumpHeight)
+  {
+    if(yVel < -100)
+    {
+      player.healthBar.energyDown(FPS, (-yVel - 100)/500);
+    }
 
-			omgbox.setExistence(0);
-		}
-		else
-			omgbox.setExistence(1);
-	}
+    if(player.healthBar.getLength() == 0)
+    {
+      for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
+      {
+        sphRing->setList(4);
+      }
+      player.healthBar.energyUp(FPS, player.healthBar.getMaxLength());
+      SphereRing::ringsPassed = 0;
+    }
+    if(SDL_GetMouseState(NULL, NULL)&SDL_BUTTON(1))
+    {
+      if(player.jetPack.getLength() != 0)
+        yVel = 10;
+      else
+      {
+        yVel = 0;
+        jumped = false;
+      }
+    }
+    else
+    {
+      jumped = false;
+      jumpFactor = terrainHeight - jumpHeight;
+    }
+
+    if(SphereRing::ringsPassed != SphereRing::numOfRings)
+    {
+      if(SphereRing::ringsPassed > 0)
+        failureSound = true;
+      for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
+      {
+        sphRing->setList(4);
+      }
+      SphereRing::ringsPassed = 0;
+
+      box.setExistence(0);
+    }
+    else
+      box.setExistence(1);
+  }
 }
 
 void display()
 {
-	GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
-	GLboolean fog_enabled = glIsEnabled(GL_FOG);
+  GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
+  GLboolean fog_enabled = glIsEnabled(GL_FOG);
 
 
-	// clear screen and depth buffer
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  // clear screen and depth buffer
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if(skyExists)		//draws the sky
-		drawSkySphere();
-	
-	//terrain drawing
-	if(textureExists)
-		glBindTexture(GL_TEXTURE_2D, texture[0]);
-	if(light_enabled)
-		glCallList(lightList[0]);
-	drawTerrain();
-	
-    glEnable(GL_BLEND);									//enable blending
-    glDepthMask(GL_FALSE);								//enable read-only depth buffer
-    
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);	//set the blend function for drawing the water
-	if(waterExists)
-	{
-		if(glIsEnabled(GL_LIGHTING))
-			glCallList(lightList[1]);
-		glBindTexture(GL_TEXTURE_2D, texture[1]);
-		drawWater();
-	}
-	
-	glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);		//set the blend function for drawing the sun and billboards
-	if(light_enabled)
-		glCallList(lightList[3]);
+  if(skyExists)		//draws the sky
+    drawSkySphere();
 
-	glDisable(GL_FOG);		//I don't want fog when drawing billboards and suns, as it throws off the blending
-	drawBillboards();
-	if(whichSun)										//draws sun(s) if any sun texture was successfully loaded
-		drawSuns();
-		
-    glDepthMask(GL_TRUE);								//set back to normal depth buffer mode (writable)
-    glDisable(GL_BLEND);								//disable blending
+  //terrain drawing
+  if(textureExists)
+    glBindTexture(GL_TEXTURE_2D, texture[0]);
+  if(light_enabled)
+    glCallList(lightList[0]);
+  drawTerrain();
 
-	//re-enable the light and fog if it is supposed to be enabled
-	if(light_enabled) 
-		glEnable(GL_LIGHTING);
-	if(fog_enabled) 
-		glEnable(GL_FOG);
+  glEnable(GL_BLEND);									//enable blending
+  glDepthMask(GL_FALSE);								//enable read-only depth buffer
 
-	if(glIsEnabled(GL_LIGHTING))
-		glCallList(lightList[2]);
-	drawObjects();		//draw objects
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);	//set the blend function for drawing the water
+  if(waterExists)
+  {
+    if(glIsEnabled(GL_LIGHTING))
+      glCallList(lightList[1]);
+    glBindTexture(GL_TEXTURE_2D, texture[1]);
+    drawWater();
+  }
 
-	drawRings();
+  glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);		//set the blend function for drawing the sun and billboards
+  if(light_enabled)
+    glCallList(lightList[3]);
 
-	if(omgbox.isExistent())
-		drawBox();
+  glDisable(GL_FOG);		//I don't want fog when drawing billboards and suns, as it throws off the blending
+  drawBillboards();
+  if(whichSun)										//draws sun(s) if any sun texture was successfully loaded
+    drawSuns();
 
-	camera();			//positions the camera correctly
+  glDepthMask(GL_TRUE);								//set back to normal depth buffer mode (writable)
+  glDisable(GL_BLEND);								//disable blending
 
-	draw2d();
+  //re-enable the light and fog if it is supposed to be enabled
+  if(light_enabled) 
+    glEnable(GL_LIGHTING);
+  if(fog_enabled) 
+    glEnable(GL_FOG);
 
-    glFlush();
-	SDL_GL_SwapBuffers();
+  if(glIsEnabled(GL_LIGHTING))
+    glCallList(lightList[2]);
+  drawObjects();		//draw objects
+
+  drawRings();
+
+  if(box.isExistent())
+    drawBox();
+
+  camera();			//positions the camera correctly
+
+  draw2d();
+
+  glFlush();
+  SDL_GL_SwapBuffers();
 }
 
 //function to initialize the projection and some variables. 
 void myinit(void)
 {
-	int i, j;
-	float pointa[3], pointb[3], pointc[3];
-	obj *temp;
-	sphereRing *temp2;
+  int i, j;
+  float pointa[3], pointb[3], pointc[3];
+  obj *temp;
+  SphereRing *temp2;
 
-	//initialize the obj list
-	first = (obj *)malloc(sizeof(obj));
-	last = (obj *)malloc(sizeof(obj));
-	first->previous = NULL;
-	first->next = last;
-	current = first;
-	last->previous = current;
-	last->next = NULL;
+  //initialize the obj list
+  first = (obj *)malloc(sizeof(obj));
+  last = (obj *)malloc(sizeof(obj));
+  first->previous = NULL;
+  first->next = last;
+  current = first;
+  last->previous = current;
+  last->next = NULL;
 
-	//initialize the billboard list
-	firstBillboard = (billboard *)malloc(sizeof(billboard));
-	lastBillboard = (billboard *)malloc(sizeof(billboard));
-	firstBillboard->previous = NULL;
-	firstBillboard->next = lastBillboard;
-	currentBillboard = firstBillboard;
-	lastBillboard->previous = currentBillboard;
-	lastBillboard->next = NULL;
+  //initialize the billboard list
+  firstBillboard = (billboard *)malloc(sizeof(billboard));
+  lastBillboard = (billboard *)malloc(sizeof(billboard));
+  firstBillboard->previous = NULL;
+  firstBillboard->next = lastBillboard;
+  currentBillboard = firstBillboard;
+  lastBillboard->previous = currentBillboard;
+  lastBillboard->next = NULL;
 
-	//initialize the billboard list
-	firstRing = (sphereRing *)malloc(sizeof(sphereRing));
-	lastRing = (sphereRing *)malloc(sizeof(sphereRing));
-	firstRing->previous = NULL;
-	firstRing->next = lastRing;
-	currentRing = firstRing;
-	lastRing->previous = currentRing;
-	lastRing->next = NULL;
+  //initialize the billboard list
+  firstRing = (SphereRing *)malloc(sizeof(SphereRing));
+  lastRing = (SphereRing *)malloc(sizeof(SphereRing));
+  firstRing->previous = NULL;
+  firstRing->next = lastRing;
+  currentRing = firstRing;
+  lastRing->previous = currentRing;
+  lastRing->next = NULL;
 
-	read_environment(environmentFile); //read the environment file
+  read_environment(environmentFile); //read the environment file
 
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);		// clear to black
-	glViewport(0, 0, width, height);
-	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-	
-	
-	skyRadius = sqrt(pow(map->height * XLEN, 2.0) + pow(map->width * ZLEN, 2.0)
-				+ pow(3*(maxHeight - minHeight), 2.0f));
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);		// clear to black
+  glViewport(0, 0, width, height);
+  glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 
 
-	//initialize the projection
-	glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-   	gluPerspective(54, (float)width/height, 1, 2*skyRadius);
-	glMatrixMode(GL_MODELVIEW);
-
-	glShadeModel(GL_SMOOTH);					    //use smooth shading
-	glEnable(GL_DEPTH_TEST);					    //hidden surface removal
-	glDepthFunc(GL_LEQUAL);
-	glEnable(GL_CULL_FACE);							//do not calculate inside of polygons
-	glEnable(GL_TEXTURE_2D);						//enable 2D texturing
-
-	//transforms grayValues into actual height values
-	for (i = 0; i < map->height; i++)
-		for (j = 0; j < map->width; j++)
-			map->grayValues[i][j] = (maxHeight - minHeight)*map->grayValues[i][j]/maxval
-								+ minHeight;
-
-	//creates a 3D array to store normal vectors
-	normals = (float ***)malloc((map->height)*sizeof(float**));
-	for (i = 0; i < map->height; i++)
-	{
-		normals[i] = (float **)malloc((map->width)*sizeof(float*));
-		for (j = 0; j < map->width; j++)
-			normals[i][j] = (float *)malloc(3*sizeof(float));
-	}
-
-	//initialized to 0 for easy calculations when averaging
-	for (i = 0; i < map->height; i++)
-		for (j = 0; j < map->width; j++)
-		{
-			normals[i][j][0] = 0;
-			normals[i][j][1] = 0;
-			normals[i][j][2] = 0;
-		}
-
-	//fills the array with the normals
-	for (i = 0; i < map->height - 1; i++)
-	{
-		for (j = 0; j < map->width - 1; j++)
-		{
-			//the normal is V0 X V1, where V0 is a vector represented by
-			//pointb - pointa, and V1 is pointc - pointa
-			pointa[0] = i * XLEN;
-			pointa[1] = map->grayValues[i][j];
-			pointa[2] = j * ZLEN;
-
-			pointb[0] = (i + 1) * XLEN;
-			pointb[1] = map->grayValues[i+1][j+1];
-			pointb[2] = (j + 1) * ZLEN;
-
-			pointc[0] = (i + 1) * XLEN;
-			pointc[1] = map->grayValues[i+1][j];
-			pointc[2] = j * ZLEN;
-
-			getNormal(normals[i][j], pointa, pointb, pointc);
-		}
-	}
-
-	//creates a 3D array to store normal average vectors for each vertex
-	averageNormals = (float ***)malloc((map->height)*sizeof(float**));
-	for(i = 0; i < map->height; i++)
-	{
-		averageNormals[i] = (float **)malloc((map->width)*sizeof(float*));
-		for(j = 0; j < map->width; j++)
-			averageNormals[i][j] = (float *)malloc(3*sizeof(float));
-	}
-
-	averageNormal();	//fill the array with the average normals
-
-	//frees the memory allocated for float ***normals
-	for(i = 0; i < map->height; i++)
-	{
-		for(j = 0; j < map->width; j++)
-			free(normals[i][j]);
-		free(normals[i]);
-	}
-	free(normals);
-
-	//set material settings for the land and water
-	landlight.ambient[0] = 0.2f;
-	landlight.ambient[1] = 0.2f;
-	landlight.ambient[2] = 0.2f;
-	landlight.ambient[3] = 1.0f;
-	landlight.diffuse[0] = 0.0f;
-	landlight.diffuse[1] = 0.5f;
-	landlight.diffuse[2] = 0.0f;
-	landlight.diffuse[3] = 1.0f;
-	landlight.specular[0] = 0.6f;
-	landlight.specular[1] = 0.6f;
-	landlight.specular[2] = 0.6f;
-	landlight.specular[3] = 1.0f;
-	landlight.emission[0] = 0.1f;
-	landlight.emission[1] = 0.1f;
-	landlight.emission[2] = 0.1f;
-	landlight.emission[3] = 1.0f;
-	landlight.shininess = 15.0f;
-
-	waterlight.ambient[0] = 0.3f;
-	waterlight.ambient[1] = 0.3f;
-	waterlight.ambient[2] = 0.6f;
-	waterlight.ambient[3] = 1.0f;
-	waterlight.diffuse[0] = 0.0f;
-	waterlight.diffuse[1] = 0.0f;
-	waterlight.diffuse[2] = 1.0f;
-	waterlight.diffuse[3] = 0.4f;
-	waterlight.specular[0] = 0.0f;
-	waterlight.specular[1] = 0.0f;
-	waterlight.specular[2] = 1.0f;
-	waterlight.specular[3] = 1.0f;
-	waterlight.emission[0] = 0.0f;
-	waterlight.emission[1] = 0.0f;
-	waterlight.emission[2] = 1.0f;
-	waterlight.emission[3] = 1.0f;
-	waterlight.shininess = 30.0f;
-
-	objectlight.ambient[0] = 1.0f;
-	objectlight.ambient[1] = 0.75f;
-	objectlight.ambient[2] = 0.5f;
-	objectlight.ambient[3] = 1.0f;
-	objectlight.diffuse[0] = 1.0f;
-	objectlight.diffuse[1] = 0.75f;
-	objectlight.diffuse[2] = 0.5f;
-	objectlight.diffuse[3] = 1.0f;
-	objectlight.specular[0] = 1.0f;
-	objectlight.specular[1] = 1.0f;
-	objectlight.specular[2] = 1.0f;
-	objectlight.specular[3] = 1.0f;
-	objectlight.emission[0] = 1.0f;
-	objectlight.emission[1] = 1.0f;
-	objectlight.emission[2] = 1.0f;
-	objectlight.emission[3] = 1.0f;
-	objectlight.shininess = 5.0f;
-
-	billboardlight.ambient[0] = 0.4f;
-	billboardlight.ambient[1] = 1.0f;
-	billboardlight.ambient[2] = 0.4f;
-	billboardlight.ambient[3] = 1.0f;
-	billboardlight.diffuse[0] = 0.0f;
-	billboardlight.diffuse[1] = 1.0f;
-	billboardlight.diffuse[2] = 0.0f;
-	billboardlight.diffuse[3] = 1.0f;
-	billboardlight.specular[0] = 0.0f;
-	billboardlight.specular[1] = 1.0f;
-	billboardlight.specular[2] = 0.0f;
-	billboardlight.specular[3] = 1.0f;
-	billboardlight.emission[0] = 0.0f;
-	billboardlight.emission[1] = 1.0f;
-	billboardlight.emission[2] = 0.0f;
-	billboardlight.emission[3] = 1.0f;
-	billboardlight.shininess = 30.0f;
-	
-	ringlighta.ambient[0] = 0.784f;
-	ringlighta.ambient[1] = 0.098f;
-	ringlighta.ambient[2] = 0.0f;
-	ringlighta.ambient[3] = 1.0f;
-	ringlighta.diffuse[0] = 0.784f;
-	ringlighta.diffuse[1] = 0.098f;
-	ringlighta.diffuse[2] = 0.0f;
-	ringlighta.diffuse[3] = 1.0f;
-	ringlighta.specular[0] = 1.0f;
-	ringlighta.specular[1] = 1.0f;
-	ringlighta.specular[2] = 1.0f;
-	ringlighta.specular[3] = 1.0f;
-	ringlighta.emission[0] = 1.0f;
-	ringlighta.emission[1] = 1.0f;
-	ringlighta.emission[2] = 1.0f;
-	ringlighta.emission[3] = 1.0f;
-	ringlighta.shininess = 5.0f;
-
-	ringlightb.ambient[0] = 0.0f;
-	ringlightb.ambient[1] = 0.784f;
-	ringlightb.ambient[2] = 0.0f;
-	ringlightb.ambient[3] = 1.0f;
-	ringlightb.diffuse[0] = 0.0f;
-	ringlightb.diffuse[1] = 0.784f;
-	ringlightb.diffuse[2] = 0.0f;
-	ringlightb.diffuse[3] = 1.0f;
-	ringlightb.specular[0] = 1.0f;
-	ringlightb.specular[1] = 1.0f;
-	ringlightb.specular[2] = 1.0f;
-	ringlightb.specular[3] = 1.0f;
-	ringlightb.emission[0] = 1.0f;
-	ringlightb.emission[1] = 1.0f;
-	ringlightb.emission[2] = 1.0f;
-	ringlightb.emission[3] = 1.0f;
-	ringlightb.shininess = 5.0f;
-
-	boxlight.ambient[0] = 1.0f;
-	boxlight.ambient[1] = 0.75f;
-	boxlight.ambient[2] = 0.5f;
-	boxlight.ambient[3] = 1.0f;
-	boxlight.diffuse[0] = 1.0f;
-	boxlight.diffuse[1] = 0.75f;
-	boxlight.diffuse[2] = 0.5f;
-	boxlight.diffuse[3] = 1.0f;
-	boxlight.specular[0] = 1.0f;
-	boxlight.specular[1] = 1.0f;
-	boxlight.specular[2] = 1.0f;
-	boxlight.specular[3] = 1.0f;
-	boxlight.emission[0] = 1.0f;
-	boxlight.emission[1] = 1.0f;
-	boxlight.emission[2] = 1.0f;
-	boxlight.emission[3] = 1.0f;
-	boxlight.shininess = 5.0f;
+  skyRadius = sqrt(pow(map->height * XLEN, 2.0) + pow(map->width * ZLEN, 2.0)
+    + pow(3*(maxHeight - minHeight), 2.0f));
 
 
+  //initialize the projection
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  gluPerspective(54, (float)width/height, 1, 2*skyRadius);
+  glMatrixMode(GL_MODELVIEW);
 
-	srand(time(NULL));	//seeds the random function
+  glShadeModel(GL_SMOOTH);					    //use smooth shading
+  glEnable(GL_DEPTH_TEST);					    //hidden surface removal
+  glDepthFunc(GL_LEQUAL);
+  glEnable(GL_CULL_FACE);							//do not calculate inside of polygons
+  glEnable(GL_TEXTURE_2D);						//enable 2D texturing
 
-	waterHeightMax = waterHeight + waterOsc;	//set up water heights
-	waterHeightMin = waterHeight - waterOsc;
+  //transforms grayValues into actual height values
+  for (i = 0; i < map->height; i++)
+    for (j = 0; j < map->width; j++)
+      map->grayValues[i][j] = (maxHeight - minHeight)*map->grayValues[i][j]/maxval
+      + minHeight;
 
-	oldY = height/2;
+  //creates a 3D array to store normal vectors
+  normals = (float ***)malloc((map->height)*sizeof(float**));
+  for (i = 0; i < map->height; i++)
+  {
+    normals[i] = (float **)malloc((map->width)*sizeof(float*));
+    for (j = 0; j < map->width; j++)
+      normals[i][j] = (float *)malloc(3*sizeof(float));
+  }
 
-	//determines what angle to look at initially
-	terrainAngle = atan((float)(map->height - 1)*XLEN/((map->width - 1)*ZLEN)); 
+  //initialized to 0 for easy calculations when averaging
+  for (i = 0; i < map->height; i++)
+    for (j = 0; j < map->width; j++)
+    {
+      normals[i][j][0] = 0;
+      normals[i][j][1] = 0;
+      normals[i][j][2] = 0;
+    }
 
-	drawFog();			//initialize fog
-	drawLight();		//initialize water
+    //fills the array with the normals
+    for (i = 0; i < map->height - 1; i++)
+    {
+      for (j = 0; j < map->width - 1; j++)
+      {
+        //the normal is V0 X V1, where V0 is a vector represented by
+        //pointb - pointa, and V1 is pointc - pointa
+        pointa[0] = i * XLEN;
+        pointa[1] = map->grayValues[i][j];
+        pointa[2] = j * ZLEN;
 
-	//creates a call list for the terrain
-	terrainList = glGenLists(1);
-	glNewList(terrainList, GL_COMPILE);
-	drawTerrainList();
-	glEndList();
+        pointb[0] = (i + 1) * XLEN;
+        pointb[1] = map->grayValues[i+1][j+1];
+        pointb[2] = (j + 1) * ZLEN;
 
-	//creates a call list for the water
-	waterList = glGenLists(1);
-	glNewList(waterList, GL_COMPILE);
-	drawWaterList();
-	glEndList();
+        pointc[0] = (i + 1) * XLEN;
+        pointc[1] = map->grayValues[i+1][j];
+        pointc[2] = j * ZLEN;
 
-	//creates call lists for each frame of each object
-	temp = (obj *)malloc(sizeof(obj));
-	objectList = (GLuint *)malloc(numOfObjects*sizeof(GLuint));
-	for(temp = first->next, i = 0; temp != last; temp = temp->next, i++)
-	{
-		objectList[i] = glGenLists(temp->fileCount);
-		for(j = 0; j < temp->fileCount; j++)
-		{
-			glNewList(objectList[i] + j, GL_COMPILE);
-			drawObjectList(temp, j);
-			glEndList();
-		}
-	}
-	free(temp);
+        getNormal(normals[i][j], pointa, pointb, pointc);
+      }
+    }
 
-	//setting call lists for changing material properties
-	lightList[0] = glGenLists(1);
-	glNewList(lightList[0], GL_COMPILE);
-	setLight(landlight);
-	glEndList();
+    //creates a 3D array to store normal average vectors for each vertex
+    averageNormals = (float ***)malloc((map->height)*sizeof(float**));
+    for(i = 0; i < map->height; i++)
+    {
+      averageNormals[i] = (float **)malloc((map->width)*sizeof(float*));
+      for(j = 0; j < map->width; j++)
+        averageNormals[i][j] = (float *)malloc(3*sizeof(float));
+    }
 
-	lightList[1] = glGenLists(1);
-	glNewList(lightList[1], GL_COMPILE);
-	setLight(waterlight);
-	glEndList();
+    averageNormal();	//fill the array with the average normals
 
-	lightList[2] = glGenLists(1);
-	glNewList(lightList[2], GL_COMPILE);
-	setLight(objectlight);
-	glEndList();
+    //frees the memory allocated for float ***normals
+    for(i = 0; i < map->height; i++)
+    {
+      for(j = 0; j < map->width; j++)
+        free(normals[i][j]);
+      free(normals[i]);
+    }
+    free(normals);
 
-	lightList[3] = glGenLists(1);
-	glNewList(lightList[3], GL_COMPILE);
-	setLight(billboardlight);
-	glEndList();
-	
-	lightList[4] = glGenLists(1);
-	glNewList(lightList[4], GL_COMPILE);
-	setLight(ringlighta);
-	glEndList();
-	
-	lightList[5] = glGenLists(1);
-	glNewList(lightList[5], GL_COMPILE);
-	setLight(ringlightb);
-	glEndList();
+    //set material settings for the land and water
+    landlight.ambient[0] = 0.2f;
+    landlight.ambient[1] = 0.2f;
+    landlight.ambient[2] = 0.2f;
+    landlight.ambient[3] = 1.0f;
+    landlight.diffuse[0] = 0.0f;
+    landlight.diffuse[1] = 0.5f;
+    landlight.diffuse[2] = 0.0f;
+    landlight.diffuse[3] = 1.0f;
+    landlight.specular[0] = 0.6f;
+    landlight.specular[1] = 0.6f;
+    landlight.specular[2] = 0.6f;
+    landlight.specular[3] = 1.0f;
+    landlight.emission[0] = 0.1f;
+    landlight.emission[1] = 0.1f;
+    landlight.emission[2] = 0.1f;
+    landlight.emission[3] = 1.0f;
+    landlight.shininess = 15.0f;
 
-	lightList[6] = glGenLists(1);
-	glNewList(lightList[6], GL_COMPILE);
-	setLight(boxlight);
-	glEndList();
+    waterlight.ambient[0] = 0.3f;
+    waterlight.ambient[1] = 0.3f;
+    waterlight.ambient[2] = 0.6f;
+    waterlight.ambient[3] = 1.0f;
+    waterlight.diffuse[0] = 0.0f;
+    waterlight.diffuse[1] = 0.0f;
+    waterlight.diffuse[2] = 1.0f;
+    waterlight.diffuse[3] = 0.4f;
+    waterlight.specular[0] = 0.0f;
+    waterlight.specular[1] = 0.0f;
+    waterlight.specular[2] = 1.0f;
+    waterlight.specular[3] = 1.0f;
+    waterlight.emission[0] = 0.0f;
+    waterlight.emission[1] = 0.0f;
+    waterlight.emission[2] = 1.0f;
+    waterlight.emission[3] = 1.0f;
+    waterlight.shininess = 30.0f;
 
-	glEnable(GL_LIGHTING);
-	SDL_WarpMouse(width/2, height/2);
-	SDL_ShowCursor (SDL_DISABLE);
+    objectlight.ambient[0] = 1.0f;
+    objectlight.ambient[1] = 0.75f;
+    objectlight.ambient[2] = 0.5f;
+    objectlight.ambient[3] = 1.0f;
+    objectlight.diffuse[0] = 1.0f;
+    objectlight.diffuse[1] = 0.75f;
+    objectlight.diffuse[2] = 0.5f;
+    objectlight.diffuse[3] = 1.0f;
+    objectlight.specular[0] = 1.0f;
+    objectlight.specular[1] = 1.0f;
+    objectlight.specular[2] = 1.0f;
+    objectlight.specular[3] = 1.0f;
+    objectlight.emission[0] = 1.0f;
+    objectlight.emission[1] = 1.0f;
+    objectlight.emission[2] = 1.0f;
+    objectlight.emission[3] = 1.0f;
+    objectlight.shininess = 5.0f;
 
-	player.jetPack.setPos(5, 5);
-	player.healthBar.setPos(5, 5 + player.healthBar.getMaxHeight());
-	//player.healthBar.setPos(5, 6 + height/40);
+    billboardlight.ambient[0] = 0.4f;
+    billboardlight.ambient[1] = 1.0f;
+    billboardlight.ambient[2] = 0.4f;
+    billboardlight.ambient[3] = 1.0f;
+    billboardlight.diffuse[0] = 0.0f;
+    billboardlight.diffuse[1] = 1.0f;
+    billboardlight.diffuse[2] = 0.0f;
+    billboardlight.diffuse[3] = 1.0f;
+    billboardlight.specular[0] = 0.0f;
+    billboardlight.specular[1] = 1.0f;
+    billboardlight.specular[2] = 0.0f;
+    billboardlight.specular[3] = 1.0f;
+    billboardlight.emission[0] = 0.0f;
+    billboardlight.emission[1] = 1.0f;
+    billboardlight.emission[2] = 0.0f;
+    billboardlight.emission[3] = 1.0f;
+    billboardlight.shininess = 30.0f;
 
-	temp2 = (sphereRing *)malloc(sizeof(sphereRing));
-	for(temp2 = firstRing->next; temp2 != lastRing; temp2 = temp2->next)
-		temp2->drawList();
+    ringlighta.ambient[0] = 0.784f;
+    ringlighta.ambient[1] = 0.098f;
+    ringlighta.ambient[2] = 0.0f;
+    ringlighta.ambient[3] = 1.0f;
+    ringlighta.diffuse[0] = 0.784f;
+    ringlighta.diffuse[1] = 0.098f;
+    ringlighta.diffuse[2] = 0.0f;
+    ringlighta.diffuse[3] = 1.0f;
+    ringlighta.specular[0] = 1.0f;
+    ringlighta.specular[1] = 1.0f;
+    ringlighta.specular[2] = 1.0f;
+    ringlighta.specular[3] = 1.0f;
+    ringlighta.emission[0] = 1.0f;
+    ringlighta.emission[1] = 1.0f;
+    ringlighta.emission[2] = 1.0f;
+    ringlighta.emission[3] = 1.0f;
+    ringlighta.shininess = 5.0f;
 
-	free(temp2);
+    ringlightb.ambient[0] = 0.0f;
+    ringlightb.ambient[1] = 0.784f;
+    ringlightb.ambient[2] = 0.0f;
+    ringlightb.ambient[3] = 1.0f;
+    ringlightb.diffuse[0] = 0.0f;
+    ringlightb.diffuse[1] = 0.784f;
+    ringlightb.diffuse[2] = 0.0f;
+    ringlightb.diffuse[3] = 1.0f;
+    ringlightb.specular[0] = 1.0f;
+    ringlightb.specular[1] = 1.0f;
+    ringlightb.specular[2] = 1.0f;
+    ringlightb.specular[3] = 1.0f;
+    ringlightb.emission[0] = 1.0f;
+    ringlightb.emission[1] = 1.0f;
+    ringlightb.emission[2] = 1.0f;
+    ringlightb.emission[3] = 1.0f;
+    ringlightb.shininess = 5.0f;
 
-	bb = (billboard *)malloc(sizeof(billboard));
-	ob = (obj *)malloc(sizeof(obj));
-	sphRing = (sphereRing *)malloc(sizeof(sphereRing));
+    boxlight.ambient[0] = 1.0f;
+    boxlight.ambient[1] = 0.75f;
+    boxlight.ambient[2] = 0.5f;
+    boxlight.ambient[3] = 1.0f;
+    boxlight.diffuse[0] = 1.0f;
+    boxlight.diffuse[1] = 0.75f;
+    boxlight.diffuse[2] = 0.5f;
+    boxlight.diffuse[3] = 1.0f;
+    boxlight.specular[0] = 1.0f;
+    boxlight.specular[1] = 1.0f;
+    boxlight.specular[2] = 1.0f;
+    boxlight.specular[3] = 1.0f;
+    boxlight.emission[0] = 1.0f;
+    boxlight.emission[1] = 1.0f;
+    boxlight.emission[2] = 1.0f;
+    boxlight.emission[3] = 1.0f;
+    boxlight.shininess = 5.0f;
+
+    srand(time(NULL));	//seeds the random function
+
+    waterHeightMax = waterHeight + waterOsc;	//set up water heights
+    waterHeightMin = waterHeight - waterOsc;
+
+    oldY = height/2;
+
+    //determines what angle to look at initially
+    terrainAngle = atan((float)(map->height - 1)*XLEN/((map->width - 1)*ZLEN)); 
+
+    drawFog();			//initialize fog
+    drawLight();		//initialize water
+
+    //creates a call list for the terrain
+    terrainList = glGenLists(1);
+    glNewList(terrainList, GL_COMPILE);
+    drawTerrainList();
+    glEndList();
+
+    //creates a call list for the water
+    waterList = glGenLists(1);
+    glNewList(waterList, GL_COMPILE);
+    drawWaterList();
+    glEndList();
+
+    //creates call lists for each frame of each object
+    temp = (obj *)malloc(sizeof(obj));
+    objectList = (GLuint *)malloc(numOfObjects*sizeof(GLuint));
+    for(temp = first->next, i = 0; temp != last; temp = temp->next, i++)
+    {
+      objectList[i] = glGenLists(temp->fileCount);
+      for(j = 0; j < temp->fileCount; j++)
+      {
+        glNewList(objectList[i] + j, GL_COMPILE);
+        drawObjectList(temp, j);
+        glEndList();
+      }
+    }
+    free(temp);
+
+    //setting call lists for changing material properties
+    lightList[0] = glGenLists(1);
+    glNewList(lightList[0], GL_COMPILE);
+    setLight(landlight);
+    glEndList();
+
+    lightList[1] = glGenLists(1);
+    glNewList(lightList[1], GL_COMPILE);
+    setLight(waterlight);
+    glEndList();
+
+    lightList[2] = glGenLists(1);
+    glNewList(lightList[2], GL_COMPILE);
+    setLight(objectlight);
+    glEndList();
+
+    lightList[3] = glGenLists(1);
+    glNewList(lightList[3], GL_COMPILE);
+    setLight(billboardlight);
+    glEndList();
+
+    lightList[4] = glGenLists(1);
+    glNewList(lightList[4], GL_COMPILE);
+    setLight(ringlighta);
+    glEndList();
+
+    lightList[5] = glGenLists(1);
+    glNewList(lightList[5], GL_COMPILE);
+    setLight(ringlightb);
+    glEndList();
+
+    lightList[6] = glGenLists(1);
+    glNewList(lightList[6], GL_COMPILE);
+    setLight(boxlight);
+    glEndList();
+
+    glEnable(GL_LIGHTING);
+    SDL_WarpMouse(width/2, height/2);
+    SDL_ShowCursor (SDL_DISABLE);
+
+    player.jetPack.setPos(5, 5);
+    player.healthBar.setPos(5, 5 + player.healthBar.getMaxHeight());
+    //player.healthBar.setPos(5, 6 + height/40);
+
+    temp2 = (SphereRing *)malloc(sizeof(SphereRing));
+    for(temp2 = firstRing->next; temp2 != lastRing; temp2 = temp2->next)
+      temp2->drawList();
+
+    free(temp2);
+
+    bb = (billboard *)malloc(sizeof(billboard));
+    ob = (obj *)malloc(sizeof(obj));
+    sphRing = (SphereRing *)malloc(sizeof(SphereRing));
 }
 
 int main(int argc, char **argv)
 {
-	Uint32 dt = 0, dtPrev = 0, index = 0, heightIndex = 0;
-	int avgFrame[20] = {10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10};
-	int running = 1;
-	int bpp = 0;
-	SDL_Surface *screen;
-	SDL_Event event;
-	const SDL_VideoInfo* info = NULL;
-	float elev[50];
-	float heightTemp;
-	float heightPrev;
+  Uint32 dt = 0, dtPrev = 0, index = 0, heightIndex = 0;
+  int avgFrame[20] = {10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10};
+  int running = 1;
+  int bpp = 0;
+  SDL_Surface *screen;
+  SDL_Event event;
+  const SDL_VideoInfo* info = NULL;
+  float elev[50];
+  float heightTemp;
+  float heightPrev;
 
-	Uint8 *keys;
+  Uint8 *keys;
 
-	Mix_Chunk *sound = NULL;		//Pointer to our sound, in memory
-	Mix_Music *music = NULL;
-	Mix_Chunk *jetpack = NULL;
-	Mix_Chunk *ding = NULL;
+  Mix_Chunk *sound = NULL;		//Pointer to our sound, in memory
+  Mix_Music *music = NULL;
+  Mix_Chunk *jetpack = NULL;
+  Mix_Chunk *ding = NULL;
 
-	RECT window;
-	GetWindowRect(GetDesktopWindow(), &window);
-	width = window.right - window.left;
-	height = window.bottom - window.top;
-	printf("%d %d\n", width, height);
+  RECT window;
+  GetWindowRect(GetDesktopWindow(), &window);
+  width = window.right - window.left;
+  height = window.bottom - window.top;
+  printf("%d %d\n", width, height);
 
-
-/*	printf("Enter x res ");
-	scanf("%d", &width);
-	printf("Enter y res ");
-	scanf("%d", &height);
-	*/
-	  
-	int audio_rate = 22050;			//Frequency of audio playback
+  int audio_rate = 22050;			//Frequency of audio playback
   Uint16 audio_format = MIX_DEFAULT_FORMAT; 	//Format of the audio we're playing
-	int audio_channels = 2;			//2 channels = stereo
-	int audio_buffers = 4096;		//Size of the audio buffers in memory
-		
-	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-		printf("Unable to initialize SDL: %s\n", SDL_GetError());
-		return 1;
-	}
+  int audio_channels = 2;			//2 channels = stereo
+  int audio_buffers = 4096;		//Size of the audio buffers in memory
 
-	//Initialize SDL_mixer with our chosen audio settings
-	if(Mix_OpenAudio(audio_rate, audio_format, audio_channels, audio_buffers) != 0) 
-	{
-		printf("Unable to initialize audio: %s\n", Mix_GetError());
-		exit(1);
-	}
+  if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+    printf("Unable to initialize SDL: %s\n", SDL_GetError());
+    return 1;
+  }
 
-	//Load our WAV file from disk
-	sound = Mix_LoadWAV("sound.wav");
-	music = Mix_LoadMUS("Rocketbelt.mp3");
-	jetpack = Mix_LoadWAV("Blowtorch.wav");
-	ding = Mix_LoadWAV("Ting.wav");
+  //Initialize SDL_mixer with our chosen audio settings
+  if(Mix_OpenAudio(audio_rate, audio_format, audio_channels, audio_buffers) != 0) 
+  {
+    printf("Unable to initialize audio: %s\n", Mix_GetError());
+    exit(1);
+  }
 
-	if(sound == NULL)
-		printf("Unable to load WAV file: %s\n", Mix_GetError());
+  //Load our WAV file from disk
+  sound = Mix_LoadWAV("sound.wav");
+  music = Mix_LoadMUS("Rocketbelt.mp3");
+  jetpack = Mix_LoadWAV("Blowtorch.wav");
+  ding = Mix_LoadWAV("Ting.wav");
 
-	if(music == NULL)
-		printf("Unable to load OGG file: %s\n", Mix_GetError());
+  if(sound == NULL)
+    printf("Unable to load WAV file: %s\n", Mix_GetError());
 
-	info = SDL_GetVideoInfo();
-	bpp = info->vfmt->BitsPerPixel;
+  if(music == NULL)
+    printf("Unable to load OGG file: %s\n", Mix_GetError());
 
-	SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 5 );
-    SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 5 );
-    SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 5 );
-    SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 16 );
-    SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
-	
-	atexit(SDL_Quit);
-	
-	screen = SDL_SetVideoMode(width, height, bpp, SDL_OPENGL | SDL_FULLSCREEN);
-	if (screen == NULL) 
-	{
-		printf("Unable to set video mode: %s\n", SDL_GetError());
-		return 1;
-	}
+  info = SDL_GetVideoInfo();
+  bpp = info->vfmt->BitsPerPixel;
 
-	SDL_WM_SetCaption("ZOMG!", NULL);
-	
-	myinit();
+  SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 5 );
+  SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 5 );
+  SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 5 );
+  SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 16 );
+  SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1 );
 
-	heightTemp = map->grayValues[0][0] * 50;
+  atexit(SDL_Quit);
 
-	for(int i = 0; i < 50; i++)
-		elev[i] = map->grayValues[0][0];
+  screen = SDL_SetVideoMode(width, height, bpp, SDL_OPENGL | SDL_FULLSCREEN);
+  if (screen == NULL) 
+  {
+    printf("Unable to set video mode: %s\n", SDL_GetError());
+    return 1;
+  }
 
-	keys = SDL_GetKeyState(NULL);
-	keys[SDLK_LCTRL] = 0;
+  SDL_WM_SetCaption("ZOMG!", NULL);
 
-	Mix_PlayMusic(music, -1);
-	
-	//Keep looping until the user closes the SDL window
-	while(running) {
+  myinit();
 
-		SDL_LockSurface(screen);
-		display();
-		SDL_UnlockSurface(screen);
-		dtPrev = dt;
-		dt = SDL_GetTicks();
-		avgFrame[index] = dt - dtPrev;
-		FPS = 0;
-		index = (index + 1) % 20;
-		for(int i = 0; i < 20; i++)
-			FPS += avgFrame[i];
-		FPS /= 20;
-		FPS = 1000/FPS;
+  heightTemp = map->grayValues[0][0] * 50;
 
-		//printf("FPS = %f\n", FPS);
-		//Get the next event from the stack
-		while(SDL_PollEvent(&event)) {
-			//What kind of event has occurred?
-			switch(event.type){
-				case SDL_KEYDOWN:	//A key has been pressed
-					if(event.key.keysym.sym == SDLK_l)
-					{
-						if(glIsEnabled(GL_LIGHTING))
-							glDisable(GL_LIGHTING);
-						else
-							glEnable(GL_LIGHTING);
-					}
-					if(event.key.keysym.sym == SDLK_f)
-					{
-						if(glIsEnabled(GL_FOG))
-							glDisable(GL_FOG);
-						else
-							glEnable(GL_FOG);
-					}
-					if(event.key.keysym.sym == SDLK_q)
-						running = 0;
-					if(event.key.keysym.sym == SDLK_SPACE)
-						if(!jumped)
-						{
-							jumpHeight = player.getY();
-							yVel = 50;
-							jumped = 1;
-						}
-					break;			
-				case SDL_KEYUP:		//A key has been released
-					break;
-				case SDL_MOUSEMOTION:
-					if((dy - event.motion.yrel)*fabs(mouseYsens) > 90)
-						dy = 90/fabs(mouseYsens);
-					else if((dy - event.motion.yrel)*fabs(mouseYsens) < -90)
-						dy = -90/fabs(mouseYsens);
-					else
-						dy -= event.motion.yrel;					
+  for(int i = 0; i < 50; i++)
+    elev[i] = map->grayValues[0][0];
 
-					dx -= event.motion.xrel;
-					if(event.motion.x < 15)
-					{
-						SDL_WarpMouse(width - 15, event.motion.y);
-						dx += width - 30;
-					}
-					if(event.motion.x > width - 15)
-					{
-						SDL_WarpMouse(15, event.motion.y);
-						dx -= width - 30;
-					}
-					if(event.motion.y < 15)
-					{
-						SDL_WarpMouse(event.motion.x, height - 15);
-						dy += height - 30;
-					}
-					if(event.motion.y > height - 15)
-					{
-						SDL_WarpMouse(event.motion.x, 15);
-						dy -= height - 30;
-					}					
-					break;
-				case SDL_QUIT:		//The user has closed the SDL window
-					running = 0;
-					break;
-			}
-		}
-		keys = SDL_GetKeyState(NULL);
-		if(keys[SDLK_w])
-			player.moveForward();
-		if(keys[SDLK_s])
-			player.moveBackward();
-		if(keys[SDLK_a])
-			player.strafeLeft();
-		if(keys[SDLK_d])
-			player.strafeRight();
-		if(keys[SDLK_LCTRL])
-		{
-			if(!jumped)
-			{
-				player.crouch();
-				//crouchFactor = 2;
-				speed = .4f;
-			}
-		}
-		else
-		{
-			player.uncrouch();
-			//crouchFactor = 0;
-			speed = 1;
-		}
-		
-		if(player.getX() < 0)
-			player.setX(0);
-		if(player.getX() > XLEN*(map->height - 1))
-			player.setX(XLEN*(map->height - 1));
-		if(player.getZ() < 0)
-			player.setZ(0);
-		if(player.getZ() > ZLEN*(map->width - 1))
-			player.setZ(ZLEN*(map->width - 1));
+  keys = SDL_GetKeyState(NULL);
+  keys[SDLK_LCTRL] = 0;
 
-		if(player.jetPack.getLength() == 0)
-		{
-			Mix_HaltChannel(1);
-			jetPackSound = 0;
-		}
+  Mix_PlayMusic(music, -1);
 
-		if(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT))
-		{
-			player.jetPack.energyDown(FPS, 0);
-			if(jetPackSound)
-			{
-				Mix_PlayChannel(1, jetpack, -1);
-				jetPackSound = 0;
-			}
-		}
-		else
-		{
-			player.jetPack.energyUp(FPS, 0);
-			Mix_HaltChannel(1);
-			jetPackSound = 1;
-		}
-		
-		heightPrev = heightTemp/50;
+  //Keep looping until the user closes the SDL window
+  while(running) {
 
-		heightIndex = (heightIndex + 1) % 50;
-		elev[heightIndex] = setHeight();
-		heightTemp = 0;
-		for(int i = 0; i < 50; i++)
-			heightTemp += elev[i];
-		
-		if(!jumped)
-		{
-			jumpFactor = 0;
-			player.setY(heightTemp/50);
-		}
-		else
-		{
-			jump(FPS, heightTemp/50, sphereRing::ringsPassed);
-			player.setY(jumpHeight + jumpFactor);
-		}
+    SDL_LockSurface(screen);
+    display();
+    SDL_UnlockSurface(screen);
+    dtPrev = dt;
+    dt = SDL_GetTicks();
+    avgFrame[index] = dt - dtPrev;
+    FPS = 0;
+    index = (index + 1) % 20;
+    for(int i = 0; i < 20; i++)
+      FPS += avgFrame[i];
+    FPS /= 20;
+    FPS = 1000/FPS;
 
-		if(player.getY() < heightTemp/50)
-			player.setY(heightTemp/50);
+    //printf("FPS = %f\n", FPS);
+    //Get the next event from the stack
+    while(SDL_PollEvent(&event)) {
+      //What kind of event has occurred?
+      switch(event.type){
+      case SDL_KEYDOWN:	//A key has been pressed
+        if(event.key.keysym.sym == SDLK_l)
+        {
+          if(glIsEnabled(GL_LIGHTING))
+            glDisable(GL_LIGHTING);
+          else
+            glEnable(GL_LIGHTING);
+        }
+        if(event.key.keysym.sym == SDLK_f)
+        {
+          if(glIsEnabled(GL_FOG))
+            glDisable(GL_FOG);
+          else
+            glEnable(GL_FOG);
+        }
+        if(event.key.keysym.sym == SDLK_q)
+          running = 0;
+        if(event.key.keysym.sym == SDLK_SPACE)
+          if(!jumped)
+          {
+            jumpHeight = player.getY();
+            yVel = 50;
+            jumped = true;
+          }
+          break;			
+      case SDL_KEYUP:		//A key has been released
+        break;
+      case SDL_MOUSEMOTION:
+        if((dy - event.motion.yrel)*fabs(mouseYsens) > 90)
+          dy = 90/fabs(mouseYsens);
+        else if((dy - event.motion.yrel)*fabs(mouseYsens) < -90)
+          dy = -90/fabs(mouseYsens);
+        else
+          dy -= event.motion.yrel;					
 
-		if(failureSound)
-		{
-			Mix_PlayChannel(0, sound, 0);
-			failureSound = 0;
-		}
+        dx -= event.motion.xrel;
+        if(event.motion.x < 15)
+        {
+          SDL_WarpMouse(width - 15, event.motion.y);
+          dx += width - 30;
+        }
+        if(event.motion.x > width - 15)
+        {
+          SDL_WarpMouse(15, event.motion.y);
+          dx -= width - 30;
+        }
+        if(event.motion.y < 15)
+        {
+          SDL_WarpMouse(event.motion.x, height - 15);
+          dy += height - 30;
+        }
+        if(event.motion.y > height - 15)
+        {
+          SDL_WarpMouse(event.motion.x, 15);
+          dy -= height - 30;
+        }					
+        break;
+      case SDL_QUIT:		//The user has closed the SDL window
+        running = 0;
+        break;
+      }
+    }
+    keys = SDL_GetKeyState(NULL);
+    if(keys[SDLK_w])
+      player.moveForward();
+    if(keys[SDLK_s])
+      player.moveBackward();
+    if(keys[SDLK_a])
+      player.strafeLeft();
+    if(keys[SDLK_d])
+      player.strafeRight();
+    if(keys[SDLK_LCTRL])
+    {
+      if(!jumped)
+      {
+        player.crouch();
+        //crouchFactor = 2;
+        speed = .4f;
+      }
+    }
+    else
+    {
+      player.uncrouch();
+      //crouchFactor = 0;
+      speed = 1;
+    }
 
-		if(passedSound)
-		{
-			Mix_PlayChannel(2, ding, 0);
-			passedSound = 0;
-		}
-	}
+    if(player.getX() < 0)
+      player.setX(0);
+    if(player.getX() > XLEN*(map->height - 1))
+      player.setX(XLEN*(map->height - 1));
+    if(player.getZ() < 0)
+      player.setZ(0);
+    if(player.getZ() > ZLEN*(map->width - 1))
+      player.setZ(ZLEN*(map->width - 1));
 
-	Mix_CloseAudio();
-	SDL_Quit();
-	return 0;
+    if(player.jetPack.getLength() == 0)
+    {
+      Mix_HaltChannel(1);
+      jetPackSound = false;
+    }
+
+    if(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT))
+    {
+      player.jetPack.energyDown(FPS, 0);
+      if(jetPackSound)
+      {
+        Mix_PlayChannel(1, jetpack, -1);
+        jetPackSound = false;
+      }
+    }
+    else
+    {
+      player.jetPack.energyUp(FPS, 0);
+      Mix_HaltChannel(1);
+      jetPackSound = true;
+    }
+
+    heightPrev = heightTemp/50;
+
+    heightIndex = (heightIndex + 1) % 50;
+    elev[heightIndex] = setHeight();
+    heightTemp = 0;
+    for(int i = 0; i < 50; i++)
+      heightTemp += elev[i];
+
+    if(!jumped)
+    {
+      jumpFactor = 0;
+      player.setY(heightTemp/50);
+    }
+    else
+    {
+      jump(FPS, heightTemp/50, SphereRing::ringsPassed);
+      player.setY(jumpHeight + jumpFactor);
+    }
+
+    if(player.getY() < heightTemp/50)
+      player.setY(heightTemp/50);
+
+    if(failureSound)
+    {
+      Mix_PlayChannel(0, sound, 0);
+      failureSound = false;
+    }
+
+    if(passedSound)
+    {
+      Mix_PlayChannel(2, ding, 0);
+      passedSound = false;
+    }
+  }
+
+  Mix_CloseAudio();
+  SDL_Quit();
+  return 0;
 }
