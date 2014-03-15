@@ -1500,7 +1500,7 @@ void jump(float FPS, float terrainHeight, int ringsPassed)
   }
 }
 
-void display()
+void display(SDL_Window *window)
 {
   GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
   GLboolean fog_enabled = glIsEnabled(GL_FOG);
@@ -1563,11 +1563,11 @@ void display()
   draw2d();
 
   glFlush();
-  SDL_GL_SwapBuffers();
+  SDL_GL_SwapWindow(window);
 }
 
 //function to initialize the projection and some variables. 
-void myinit(void)
+void myinit(SDL_Window *window)
 {
   int i, j;
   float pointa[3], pointb[3], pointc[3];
@@ -1895,7 +1895,7 @@ void myinit(void)
     glEndList();
 
     glEnable(GL_LIGHTING);
-    SDL_WarpMouse(width/2, height/2);
+    SDL_WarpMouseInWindow(window, width/2, height/2);
     SDL_ShowCursor (SDL_DISABLE);
 
     player.jetPack.setPos(5, 5);
@@ -1917,26 +1917,14 @@ int main(int argc, char **argv)
 {
   Uint32 dt = 0, dtPrev = 0, index = 0, heightIndex = 0;
   int avgFrame[20] = {10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10};
-  int running = 1;
-  int bpp = 0;
-  SDL_Surface *screen;
-  SDL_Event event;
-  const SDL_VideoInfo* info = NULL;
   float elev[50];
   float heightTemp;
   float heightPrev;
 
-  Uint8 *keys;
-
-  Mix_Chunk *sound = NULL;		//Pointer to our sound, in memory
-  Mix_Music *music = NULL;
-  Mix_Chunk *jetpack = NULL;
-  Mix_Chunk *ding = NULL;
-
-  RECT window;
-  GetWindowRect(GetDesktopWindow(), &window);
-  width = window.right - window.left;
-  height = window.bottom - window.top;
+  RECT windowRect;
+  GetWindowRect(GetDesktopWindow(), &windowRect);
+  width = windowRect.right - windowRect.left;
+  height = windowRect.bottom - windowRect.top;
   printf("%d %d\n", width, height);
 
   int audio_rate = 22050;			//Frequency of audio playback
@@ -1957,19 +1945,16 @@ int main(int argc, char **argv)
   }
 
   //Load our WAV file from disk
-  sound = Mix_LoadWAV("sound.wav");
-  music = Mix_LoadMUS("Rocketbelt.mp3");
-  jetpack = Mix_LoadWAV("Blowtorch.wav");
-  ding = Mix_LoadWAV("Ting.wav");
+  Mix_Chunk *sound = Mix_LoadWAV("sound.wav");
+  Mix_Music *music = Mix_LoadMUS("Rocketbelt.mp3");
+  Mix_Chunk *jetpack = Mix_LoadWAV("Blowtorch.wav");
+  Mix_Chunk *ding = Mix_LoadWAV("Ting.wav");
 
   if(sound == NULL)
     printf("Unable to load WAV file: %s\n", Mix_GetError());
 
   if(music == NULL)
     printf("Unable to load OGG file: %s\n", Mix_GetError());
-
-  info = SDL_GetVideoInfo();
-  bpp = info->vfmt->BitsPerPixel;
 
   SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 5 );
   SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 5 );
@@ -1979,33 +1964,33 @@ int main(int argc, char **argv)
 
   atexit(SDL_Quit);
 
-  screen = SDL_SetVideoMode(width, height, bpp, SDL_OPENGL | SDL_FULLSCREEN);
-  if (screen == NULL) 
+  SDL_Window *window = SDL_CreateWindow("Jetpack", 0, 0, width, height, SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
+  if (window == NULL) 
   {
-    printf("Unable to set video mode: %s\n", SDL_GetError());
-    return 1;
+    printf("Unable to create Window: %s\n", SDL_GetError());
+    return -1;
+  }
+  SDL_GLContext context = SDL_GL_CreateContext(window);
+  if(context == 0)
+  {
+    printf("Unable to create OpenGL context: %s\n", SDL_GetError());
+    return -1;
   }
 
-  SDL_WM_SetCaption("ZOMG!", NULL);
-
-  myinit();
+  myinit(window);
 
   heightTemp = map->grayValues[0][0] * 50;
 
   for(int i = 0; i < 50; i++)
     elev[i] = map->grayValues[0][0];
-
-  keys = SDL_GetKeyState(NULL);
-  keys[SDLK_LCTRL] = 0;
-
+  
   Mix_PlayMusic(music, -1);
 
   //Keep looping until the user closes the SDL window
-  while(running) {
-
-    SDL_LockSurface(screen);
-    display();
-    SDL_UnlockSurface(screen);
+  bool running = true;
+  while(running) 
+  {
+    display(window);
     dtPrev = dt;
     dt = SDL_GetTicks();
     avgFrame[index] = dt - dtPrev;
@@ -2018,6 +2003,7 @@ int main(int argc, char **argv)
 
     //printf("FPS = %f\n", FPS);
     //Get the next event from the stack
+    SDL_Event event;
     while(SDL_PollEvent(&event)) {
       //What kind of event has occurred?
       switch(event.type){
@@ -2037,7 +2023,7 @@ int main(int argc, char **argv)
             glEnable(GL_FOG);
         }
         if(event.key.keysym.sym == SDLK_q)
-          running = 0;
+          running = false;
         if(event.key.keysym.sym == SDLK_SPACE)
           if(!jumped)
           {
@@ -2059,40 +2045,40 @@ int main(int argc, char **argv)
         dx -= event.motion.xrel;
         if(event.motion.x < 15)
         {
-          SDL_WarpMouse(width - 15, event.motion.y);
+          SDL_WarpMouseInWindow(window, width - 15, event.motion.y);
           dx += width - 30;
         }
         if(event.motion.x > width - 15)
         {
-          SDL_WarpMouse(15, event.motion.y);
+          SDL_WarpMouseInWindow(window, 15, event.motion.y);
           dx -= width - 30;
         }
         if(event.motion.y < 15)
         {
-          SDL_WarpMouse(event.motion.x, height - 15);
+          SDL_WarpMouseInWindow(window, event.motion.x, height - 15);
           dy += height - 30;
         }
         if(event.motion.y > height - 15)
         {
-          SDL_WarpMouse(event.motion.x, 15);
+          SDL_WarpMouseInWindow(window, event.motion.x, 15);
           dy -= height - 30;
         }					
         break;
       case SDL_QUIT:		//The user has closed the SDL window
-        running = 0;
+        running = false;
         break;
       }
     }
-    keys = SDL_GetKeyState(NULL);
-    if(keys[SDLK_w])
+    const Uint8 *keys = SDL_GetKeyboardState(NULL);
+    if(keys[SDL_SCANCODE_W])
       player.moveForward();
-    if(keys[SDLK_s])
+    if(keys[SDL_SCANCODE_S])
       player.moveBackward();
-    if(keys[SDLK_a])
+    if(keys[SDL_SCANCODE_A])
       player.strafeLeft();
-    if(keys[SDLK_d])
+    if(keys[SDL_SCANCODE_D])
       player.strafeRight();
-    if(keys[SDLK_LCTRL])
+    if(keys[SDL_SCANCODE_LCTRL])
     {
       if(!jumped)
       {
