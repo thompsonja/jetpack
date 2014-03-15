@@ -1,0 +1,15 @@
+HEIGHT map.pgm -100 50
+LENGTHS 5 4
+BILLBOARD agac tree2.bmp 120 120
+TEXTURE soil.bmp
+WATER water1.bmp -95 1
+OBJ Animated anim.mod 1 1
+BILLBOARD agac tree2.bmp 50 50
+OBJ Static anim01.mod 10 2
+OBJ Animated anim.mod 3 5
+OBJ Static anim12.mod 1 6
+OBJ Static anim10.mod 1 3
+SKYDOME sky0.bmp 3
+BILLBOARD agac tree.bmp 5 15
+SUN nebula.bmp Star.bmp
+BILLBOARD agac soil3.bmp 100 100
