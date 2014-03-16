@@ -51,13 +51,13 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\;..\SDL2\include;..\glut\include\GL;..\SDL2_mixer-2.0.0\include;..\glaux</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\;..\SDL2\include;..\glut\include\GL;..\SDL2_mixer-2.0.0\include;..\FreeImage\Dist</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_USE_MATH_DEFINES;_MBCS;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\GL;.\;..\SDL2\lib\x86;..\SDL2_mixer-2.0.0\lib\x86;..\glaux</AdditionalLibraryDirectories>
-      <AdditionalDependencies>kernel32.lib; user32.lib; gdi32.lib; Advapi32.lib; SDL2.lib; SDL2Main.lib; opengl32.lib; SDL2_mixer.lib; GLU32.lib; glaux.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>..\GL;.\;..\SDL2\lib\x86;..\SDL2_mixer-2.0.0\lib\x86;..\FreeImage\Dist</AdditionalLibraryDirectories>
+      <AdditionalDependencies>kernel32.lib; user32.lib; gdi32.lib; Advapi32.lib; SDL2.lib; SDL2Main.lib; opengl32.lib; SDL2_mixer.lib; GLU32.lib; FreeImage.lib</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>

@@ -52,13 +52,13 @@ to be outside of the terrain.
 #include <Windows.h>
 #include "SDL.h"
 #include "SDL_mixer.h"
+#include "FreeImage.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <glut.h>
 #include <time.h>
 #include <math.h>
-#include <glaux.h>
 #include "User.h"
 #include "SphereRing.h"
 #include "Box.h"
@@ -234,53 +234,51 @@ light_t landlight, waterlight, objectlight, billboardlight, ringlighta, ringligh
 //Load bmps and convert to textures
 bool loadTextures(char *filename, int i)		
 {
-  AUX_RGBImageRec *textureImage = auxDIBImageLoad(filename);
+  FREE_IMAGE_FORMAT format = FreeImage_GetFileType(filename);
+  if(format == FIF_UNKNOWN)
+  {
+    printf("Unknown image format for file %s\n", filename);
+    return false;
+  }
 
-  //Load the bmp and check for errors
-  if (textureImage == NULL) return false;
+  FIBITMAP *tex = FreeImage_Load(format, filename);
+  if(tex == NULL)
+  {
+    printf("FreeImage failed to load file %s\n", filename);
+    return false;
+  }
 
-  glGenTextures(1, &texture[i]);					//Create the texture
+  FIBITMAP *tex32 = FreeImage_ConvertTo32Bits(tex);
+  if(tex32 == NULL)
+  {
+    printf("FreeImage failed to convert file %s to 32 bit format\n", filename);
+    return false;
+  }
 
-  //Texture generation
+  bmpx = FreeImage_GetWidth(tex32);
+  bmpy = FreeImage_GetHeight(tex32);
+
+  glGenTextures(1, &texture[i]);
   glBindTexture(GL_TEXTURE_2D, texture[i]);
-  glTexImage2D(GL_TEXTURE_2D, 0, 3, textureImage->sizeX, textureImage->sizeY, 0, GL_RGB, GL_UNSIGNED_BYTE, textureImage->data);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, bmpx, bmpy, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (void*)FreeImage_GetBits(tex32));
   glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-
-  //stores the bitmap size information into global variables
-  bmpx = textureImage->sizeX;
-  bmpy = textureImage->sizeY;
-
-  if (textureImage->data)
-    free(textureImage->data);
-  free(textureImage);
-
+  FreeImage_Unload(tex32);
+  FreeImage_Unload(tex);
+  
   return true;										//Returns whether or not it succeeds
 }
-/*
-void PlaySound(Mix_Chunk *sound)
-{
-//Play the sound on the first channel available, with no looping
-if(Mix_PlayChannel(-1, sound, 0)==-1) 
-{
-//Must've been an error playing the sound!
-printf("Mix_PlayChannel: %s\n", Mix_GetError());
-}
-}
-*/
+
 void billboardInsert(char *name, char *filename, int coords[MAXBILLBOARDS][2], int count)
 {
-  int i;
-  billboard *temp;
-
   printf("	Loading billboard . . . . . . ");
-  temp = (billboard *)malloc(sizeof(billboard));
+  billboard *temp = (billboard *)malloc(sizeof(billboard));
   temp->texNumber = curTexture;					//set the billboard texture number to curTexture
   temp->numOfBoards = count;						//how many billboards are listed in the line in the env. file
 
   if(loadTextures(filename, temp->texNumber))		//if it loads the texture correctly
   {
-    for(i = 0; i < count; i++)
+    for(int i = 0; i < count; i++)
     {
       //inserts the billboard into the linked list
       temp->width = bmpx;
@@ -300,7 +298,6 @@ void billboardInsert(char *name, char *filename, int coords[MAXBILLBOARDS][2], i
   }
   else
   {
-    //prints a failure statement :(
     printf("FAILED\n\t\tCould not open billboard: %s\n", filename);
   }
 }
@@ -308,19 +305,16 @@ void billboardInsert(char *name, char *filename, int coords[MAXBILLBOARDS][2], i
 //inserts the object into a double linked list
 void objInsert(int type, char name[], int x, int z)
 {
-  obj *temp;
-  FILE *f;
   char dummy;
   char text[256];
   char newname[32];
   char buffer[256];
   int line = 0;
-  int i, j;
   int fileCounter = 1;
 
   bool status = true;
 
-  temp = (obj *)malloc(sizeof(obj));
+  obj *temp = (obj *)malloc(sizeof(obj));
 
   //inserts a static object
   if(type == STATIC)
@@ -328,7 +322,7 @@ void objInsert(int type, char name[], int x, int z)
     temp->fileCount = 1;
     temp->values = (float ***)malloc(1*sizeof(float **));
     temp->modLines = (int *)malloc(1*sizeof(int));
-    f = fopen(name, "r");
+    FILE *f = fopen(name, "r");
     if(f == NULL)
     {
       printf("FAILED\n\t\tCould not open object file: %s\n", name);
@@ -349,12 +343,12 @@ void objInsert(int type, char name[], int x, int z)
       temp->values[0] = (float **)malloc(line*sizeof(float *));
 
       //allocates 8 elements: first 3 are Normals, next 2 are for Tex coords, last 3 are vertices
-      for(i = 0; i < line; i++)
+      for(int i = 0; i < line; i++)
         temp->values[0][i] = (float *)malloc(8*sizeof(float));
 
       f = fopen(name, "r");
 
-      for(i = 0; fgets(text, 128*sizeof(char), f) != NULL; i++)
+      for(int i = 0; fgets(text, 128*sizeof(char), f) != NULL; i++)
       {
 
         //scans in the values for a line.  Note: I have it going as N, N[2],
@@ -370,7 +364,7 @@ void objInsert(int type, char name[], int x, int z)
 
       //finds the minimum height of the object
       temp->minHeight = temp->values[0][0][6];
-      for(i = 0; i < temp->modLines[0]; i++)
+      for(int i = 0; i < temp->modLines[0]; i++)
       {
         if (temp->values[0][i][6] < temp->minHeight)
           temp->minHeight = temp->values[0][i][6];
@@ -381,6 +375,7 @@ void objInsert(int type, char name[], int x, int z)
   else if (type == ANIMATED)
   {
     //gets the base name (ie anim.mod becomes anim)
+    int i = 0;
     for (i = 0; name[i] != '.'; i++)
       newname[i] = name[i];
     newname[i] = '\0';
@@ -400,11 +395,11 @@ void objInsert(int type, char name[], int x, int z)
     temp->modLines = (int *)malloc((temp->fileCount)*sizeof(int));
 
     //this is the same as for the static case, but this does it for each file
-    for(i = 0; i < temp->fileCount; i++)
+    for(int i = 0; i < temp->fileCount; i++)
     {
       line = 0;
       sprintf(buffer, "%s%.2d%s%c", newname, i+1, ".mod", '\0');
-      f = fopen(buffer, "r");
+      FILE *f = fopen(buffer, "r");
       while(fgets(text, 128*sizeof(char), f) != NULL)
       {
         if (text[0] == 'N')
@@ -414,12 +409,12 @@ void objInsert(int type, char name[], int x, int z)
 
       temp->modLines[i] = line;
       temp->values[i] = (float **)malloc((temp->modLines[i])*sizeof(float *));
-      for(j = 0; j < temp->modLines[i]; j++)
+      for(int j = 0; j < temp->modLines[i]; j++)
         temp->values[i][j] = (float *)malloc(8*sizeof(float));
 
       f = fopen(buffer, "r");
 
-      for(j = 0; fgets(text, 128*sizeof(char), f) != NULL; j++)
+      for(int j = 0; fgets(text, 128*sizeof(char), f) != NULL; j++)
       {
 
         //scans in the values for a line.  Note: I have it going as N, N[2],
@@ -435,7 +430,7 @@ void objInsert(int type, char name[], int x, int z)
 
       temp->minHeight = temp->values[0][0][6];
 
-      for(j = 0; j < temp->modLines[0]; j++)
+      for(int j = 0; j < temp->modLines[0]; j++)
       {
         if (temp->values[0][j][6] < temp->minHeight)
           temp->minHeight = temp->values[0][j][6];
