@@ -1,7 +1,5 @@
-//Author    : Joshua Thompson
-//PID       : J1344017
-//Date      : 8/07/06
-//Assignment: Project - Terrain Rendering
+//Author        : thompsonja
+//Original Date : 8/07/06
 
 /*NOTES: My axis system placed the y axis as going up and down, as reflected in the program
 
@@ -62,11 +60,11 @@ to be outside of the terrain.
 #include "User.h"
 #include "SphereRing.h"
 #include "Box.h"
+#include "Model.h"
+#include <vector>
 
 const double PI = 3.14159265358979323846;
 
-#define STATIC 0					//for OBJ types
-#define ANIMATED 1					//for OBJ types
 #define TILED 0						//tile the terrain texture, applying it to each quad
 #define STRETCHED 1					//stretch the whole texture over the entire terrain
 #define MAXBILLBOARDS 20			//max billboards per texture
@@ -159,8 +157,6 @@ int whichSun = 0;					//which sun to render (based on random seed)
 
 
 //other variables
-
-int numOfObjects = 0;
 float terrainAngle;					//represents the initial angle to look at, for a square
 //map this should be pi/4 radians
 float scaleFactor = 1;				//how much to scale objects/billboards
@@ -180,6 +176,8 @@ SphereRing *firstRing, *lastRing, *currentRing, *sphRing;
 
 Box box(8, 3, 8, 10, 10, 10);
 
+std::vector<Model*> models;
+
 //image struct used to store the heightmap
 typedef struct 
 {
@@ -189,23 +187,6 @@ typedef struct
 } image_type;
 
 image_type *map;
-
-//obj type for objects defined in the environment file
-typedef struct obj
-{
-  float ***values;				//stores all the vertices etc. values
-  float minHeight;				//the bottom of the object
-  int objType;					//animated or static
-  char *objName;					//object's filename
-  int *modLines;					//lines of vertices etc. per file
-  int xpos;						
-  int zpos;
-  int fileCount;					//how many files are in the animation
-  int Counter;					//which file to animate in the frame
-  struct obj *next, *previous;
-} obj;
-
-obj *first, *last, *current, *ob;	//these are used for the linked list, like in hw1
 
 //billboard type for billboards defined in the environment file
 typedef struct billboard
@@ -303,166 +284,14 @@ void billboardInsert(char *name, char *filename, int coords[MAXBILLBOARDS][2], i
 }
 
 //inserts the object into a double linked list
-void objInsert(int type, char name[], int x, int z)
+void objInsert(Model::AnimationType type, char *name, int x, int z)
 {
-  char dummy;
-  char text[256];
-  char newname[32];
-  char buffer[256];
-  int line = 0;
-  int fileCounter = 1;
-
-  bool status = true;
-
-  obj *temp = (obj *)malloc(sizeof(obj));
-
-  //inserts a static object
-  if(type == STATIC)
-  {
-    temp->fileCount = 1;
-    temp->values = (float ***)malloc(1*sizeof(float **));
-    temp->modLines = (int *)malloc(1*sizeof(int));
-    FILE *f = fopen(name, "r");
-    if(f == NULL)
-    {
-      printf("FAILED\n\t\tCould not open object file: %s\n", name);
-      status = false;
-    }
-    else
-    {
-      //first it reads how many lines of vertices, etc., there are in the .mod file
-      while(fgets(text, 128*sizeof(char), f) != NULL)
-      {
-        if (text[0] == 'N')
-          line++;
-      }
-      temp->modLines[0] = line;
-
-      fclose(f);
-      //dynamically allocates the proper amount of space based on how many lines there are
-      temp->values[0] = (float **)malloc(line*sizeof(float *));
-
-      //allocates 8 elements: first 3 are Normals, next 2 are for Tex coords, last 3 are vertices
-      for(int i = 0; i < line; i++)
-        temp->values[0][i] = (float *)malloc(8*sizeof(float));
-
-      f = fopen(name, "r");
-
-      for(int i = 0; fgets(text, 128*sizeof(char), f) != NULL; i++)
-      {
-
-        //scans in the values for a line.  Note: I have it going as N, N[2],
-        //and N[1] because I took the y-direction as up and down, so putting
-        //it in this order made the object right-side-up.
-
-        sscanf(text, "%c%f%f%f%c%c%f%f%c%c%f%f%f", &dummy, &(temp->values[0][i][0]), 
-          &(temp->values[0][i][2]), &(temp->values[0][i][1]), &dummy, &dummy,
-          &(temp->values[0][i][3]), &(temp->values[0][i][4]), &dummy, &dummy, 
-          &(temp->values[0][i][5]), &(temp->values[0][i][7]), &(temp->values[0][i][6]));
-      }
-      fclose(f);
-
-      //finds the minimum height of the object
-      temp->minHeight = temp->values[0][0][6];
-      for(int i = 0; i < temp->modLines[0]; i++)
-      {
-        if (temp->values[0][i][6] < temp->minHeight)
-          temp->minHeight = temp->values[0][i][6];
-      }
-      printf("DONE\n");
-    }
-  }
-  else if (type == ANIMATED)
-  {
-    //gets the base name (ie anim.mod becomes anim)
-    int i = 0;
-    for (i = 0; name[i] != '.'; i++)
-      newname[i] = name[i];
-    newname[i] = '\0';
-
-    //calculates how many files are in a row
-    for(sprintf(buffer, "%s%.2d%s%c", newname, fileCounter, ".mod", '\0'); 
-      (fopen(buffer, "r") != NULL); )
-    {
-      fileCounter++;
-      sprintf(buffer, "%s%.2d%s%c", newname, fileCounter, ".mod", '\0');
-    }
-
-    //fileCounter will end up being one more than the number of files, so reduce it by one
-    temp->fileCount = fileCounter - 1;
-    //allocates memory like in the static case
-    temp->values = (float ***)malloc((temp->fileCount)*sizeof(float **));
-    temp->modLines = (int *)malloc((temp->fileCount)*sizeof(int));
-
-    //this is the same as for the static case, but this does it for each file
-    for(int i = 0; i < temp->fileCount; i++)
-    {
-      line = 0;
-      sprintf(buffer, "%s%.2d%s%c", newname, i+1, ".mod", '\0');
-      FILE *f = fopen(buffer, "r");
-      while(fgets(text, 128*sizeof(char), f) != NULL)
-      {
-        if (text[0] == 'N')
-          line++;
-      }
-      fclose(f);
-
-      temp->modLines[i] = line;
-      temp->values[i] = (float **)malloc((temp->modLines[i])*sizeof(float *));
-      for(int j = 0; j < temp->modLines[i]; j++)
-        temp->values[i][j] = (float *)malloc(8*sizeof(float));
-
-      f = fopen(buffer, "r");
-
-      for(int j = 0; fgets(text, 128*sizeof(char), f) != NULL; j++)
-      {
-
-        //scans in the values for a line.  Note: I have it going as N, N[2],
-        //and N[1] because I took the y-direction as up and down, so putting
-        //it in this order made the object right-side-up.
-
-        sscanf(text, "%c%f%f%f%c%c%f%f%c%c%f%f%f", &dummy, &(temp->values[i][j][0]), 
-          &(temp->values[i][j][2]), &(temp->values[i][j][1]), &dummy, &dummy,
-          &(temp->values[i][j][3]), &(temp->values[i][j][4]), &dummy, &dummy, 
-          &(temp->values[i][j][5]), &(temp->values[i][j][7]), &(temp->values[i][j][6]));
-      }
-      fclose(f);
-
-      temp->minHeight = temp->values[0][0][6];
-
-      for(int j = 0; j < temp->modLines[0]; j++)
-      {
-        if (temp->values[0][j][6] < temp->minHeight)
-          temp->minHeight = temp->values[0][j][6];
-      }
-    }
-    //if the fileCounter is 1, that means it didn't load any files correctly, which is bad :(
-    if(fileCounter == 1)
-    {
-      printf("FAILED\n\t\tCould not open object file starting with: %s\n", newname);
-      status = false;
-    }
-    else
-      printf("DONE\n");
-  }
+  models.push_back(new Model(type, name));
 
   //if the object was successfully loaded, insert it into the linked list
-  if(status)
+  if(models.back()->IsValid())
   {
-    temp->Counter = 0;
-    temp->objType = type;
-    temp->xpos = x;
-    temp->zpos = z;
-    temp->objName = name;
-
-    temp->previous = current;
-    temp->next = last;
-    current->next = temp;
-    current = current->next;
-    current->next = last;
-    last->previous = current;
-
-    numOfObjects++;
+    models.back()->SetStartPosition(Point2D(x, z));
   }
 }
 
@@ -651,7 +480,7 @@ void read_environment(char *filename)
         if(objx > map->height || objz > map->width)
           printf("FAILED\n\t\tObject outside of terrain\n");
         else
-          objInsert(STATIC, param2, objx, objz);
+          objInsert(Model::MODEL_STATIC, param2, objx, objz);
       }
       else if(strcmp(param1, "Animated") == 0)
       {
@@ -659,7 +488,7 @@ void read_environment(char *filename)
         if(objx > map->height || objz > map->width)
           printf("FAILED\n\t\tObject outside of terrain\n");
         else
-          objInsert(ANIMATED, param2, objx, objz);
+          objInsert(Model::MODEL_ANIMATED, param2, objx, objz);
       }
     }
     else if (strcmp(keyword, "BILLBOARD") == 0)
@@ -931,45 +760,41 @@ void averageNormal()
 
 void drawObjects()
 {
-  int i;
   glDisable(GL_TEXTURE_2D); //I was told to disable textures for objects, even though they have texture coordinates
 
   //draws each object
-  for(ob = first->next, i = 0; ob != last; ob = ob->next, i++)
+  for(unsigned int i = 0; i < models.size(); i++)
   {
+    const Point3D &currentPosition = models[i]->GetPosition();
     glPushMatrix();
-    glTranslatef((ob->xpos - 1)*XLEN, 
-      map->grayValues[ob->xpos-1][ob->zpos-1] - (ob->minHeight - .001)*scaleFactor, (ob->zpos - 1)*ZLEN);
+    glTranslatef((currentPosition.GetX() - 1)*XLEN, 
+      map->grayValues[(int)currentPosition.GetX()-1][(int)currentPosition.GetZ()-1] - (currentPosition.GetY() - .001)*scaleFactor, (currentPosition.GetZ() - 1)*ZLEN);
     glScalef(scaleFactor, scaleFactor, scaleFactor);
 
-    glCallList(objectList[i] + ob->Counter/animationSpeed);
+    glCallList(objectList[i] + models[i]->GetCurrentFrame()/animationSpeed);
 
-    //if the object is static, ob->Counter is 0, so it will always draw the same object, but if it is
-    //animated, I use integer division to modify when the next object in the animation is drawn.  By
-    //increasing animationSpeed, it takes more renders for ob->Counter/animationSpeed to actually increase.
-    //Also, the CallList is sequential, as when it's an animated object, I call for a group of sequential lists,
-    //based on how many files are loaded in the animation.
-    ob->Counter++;
-    if(ob->Counter > animationSpeed*ob->fileCount - 1)
-      ob->Counter = 0;
+    models[i]->IncrementFrame(animationSpeed);
     glPopMatrix();
   }
 }
 
-void drawObjectList(obj *curObject, int frame)
+void drawObjectList(int modelNum, int frame)
 {
   int i;
 
+  Model *mod = models[modelNum];
+
   //draws the triangles for every line in the .mod file
   glBegin(GL_TRIANGLES);
-  for(i = 0; i < curObject->modLines[frame]; i++)
+  for(i = 0; i < mod->GetLinesAtFrame(frame); i++)
   {
-    glNormal3f(curObject->values[frame][i][0], curObject->values[frame][i][1], 
-      curObject->values[frame][i][2]);
+    const Point3D &normal = mod->GetNormal(frame, i);
+    const Point2D &texture = mod->GetTexture(frame, i);
+    const Point3D &vertex = mod->GetVertex(frame, i);
+    glNormal3f(normal.GetX(), normal.GetY(), normal.GetZ());
     //Guess I don't need to call texture coordinates if there is no texture :D
-    //glTexCoord2f(curObject->values[frame][i][3], curObject->values[frame][i][4]);
-    glVertex3f(curObject->values[frame][i][5], curObject->values[frame][i][6], 
-      curObject->values[frame][i][7]);
+    //glTexCoord2f(texture.GetX(), texture.GetY());
+    glVertex3f(vertex.GetX(), vertex.GetY(), vertex.GetZ());
   }
   glEnd();
 }
@@ -1566,17 +1391,7 @@ void myinit(SDL_Window *window)
 {
   int i, j;
   float pointa[3], pointb[3], pointc[3];
-  obj *temp;
   SphereRing *temp2;
-
-  //initialize the obj list
-  first = (obj *)malloc(sizeof(obj));
-  last = (obj *)malloc(sizeof(obj));
-  first->previous = NULL;
-  first->next = last;
-  current = first;
-  last->previous = current;
-  last->next = NULL;
 
   //initialize the billboard list
   firstBillboard = (billboard *)malloc(sizeof(billboard));
@@ -1601,7 +1416,6 @@ void myinit(SDL_Window *window)
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);		// clear to black
   glViewport(0, 0, width, height);
   glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
-
 
   skyRadius = sqrt(pow(map->height * XLEN, 2.0) + pow(map->width * ZLEN, 2.0)
     + pow(3*(maxHeight - minHeight), 2.0f));
@@ -1839,19 +1653,17 @@ void myinit(SDL_Window *window)
     glEndList();
 
     //creates call lists for each frame of each object
-    temp = (obj *)malloc(sizeof(obj));
-    objectList = (GLuint *)malloc(numOfObjects*sizeof(GLuint));
-    for(temp = first->next, i = 0; temp != last; temp = temp->next, i++)
+    objectList = (GLuint *)malloc(models.size()*sizeof(GLuint));
+    for(unsigned int i = 0; i < models.size(); i++)
     {
-      objectList[i] = glGenLists(temp->fileCount);
-      for(j = 0; j < temp->fileCount; j++)
+      objectList[i] = glGenLists(models[i]->GetNumFrames());
+      for(j = 0; j < models[i]->GetNumFrames(); j++)
       {
         glNewList(objectList[i] + j, GL_COMPILE);
-        drawObjectList(temp, j);
+        drawObjectList(i, j);
         glEndList();
       }
     }
-    free(temp);
 
     //setting call lists for changing material properties
     lightList[0] = glGenLists(1);
@@ -1904,7 +1716,6 @@ void myinit(SDL_Window *window)
     free(temp2);
 
     bb = (billboard *)malloc(sizeof(billboard));
-    ob = (obj *)malloc(sizeof(obj));
     sphRing = (SphereRing *)malloc(sizeof(SphereRing));
 }
 
@@ -1950,6 +1761,8 @@ int main(int argc, char **argv)
 
   if(music == NULL)
     printf("Unable to load OGG file: %s\n", Mix_GetError());
+
+  //read_environment(environmentFile); //read the environment file
 
   SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 5 );
   SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 5 );
