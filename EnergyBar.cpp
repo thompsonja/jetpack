@@ -8,7 +8,6 @@ extern int width;
 extern int height;
 extern float yVel;
 extern float jumpHeight;
-extern bool jumped;
 extern User player;
 
 EnergyBar::EnergyBar()
@@ -59,9 +58,9 @@ void EnergyBar::energyDown(float FPS, float amount)
 		{
 			length -= 300/FPS * .25;
 			yVel += 300/FPS * .48;
-			if(!jumped)
+      if(!player.IsJumping())
 			{
-				jumped = true;
+        player.SetJumping(true);
 				jumpHeight = player.GetY();
 				yVel = 10;
 			}

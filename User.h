@@ -10,11 +10,11 @@ public:
 	User();
 	EnergyBar healthBar;
 	EnergyBar jetPack;
-	void  UpdatePos();
-	void  MoveForward();
-	void  MoveBackward();
-	void  StrafeLeft();
-	void  StrafeRight();
+	void UpdatePos(double dx, double dy);
+	void MoveForward(double dt, double dx, double dy);
+	void MoveBackward(double dt, double dx, double dy);
+	void StrafeLeft(double dt, double dx, double dy);
+	void StrafeRight(double dt, double dx, double dy);
 	double GetX();
 	double GetY();
 	double GetZ();
@@ -25,12 +25,18 @@ public:
 	void SetX(double x);
 	void SetY(double y);
 	void SetZ(double z);
-	bool OnBox;
   const Point3D& GetPosition();
+  bool IsJumping();
+  void SetJumping(bool val);
+  bool IsOnBox();
+  void SetOnBox(bool val);
 private:
   Point3D position;
 	float height;
 	float rad;
+  bool isJumping;
+  bool isOnBox;
+  float speed;
 };
 
 #endif

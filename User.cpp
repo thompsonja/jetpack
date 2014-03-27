@@ -3,12 +3,6 @@
 #include <glut.h>
 #include <math.h>
 
-extern float dx;
-extern float dy;
-extern float mouseXsens;
-extern float mouseYsens;
-extern float FPS;
-extern float speed;
 extern float terrainAngle;
 
 User::User() : 
@@ -17,46 +11,48 @@ User::User() :
   position(0, 0, 0),
   height(6),
   rad(1.5),
-  OnBox(false)
+  isOnBox(false),
+  isJumping(false),
+  speed(1)
 {
 }
 
-void User::UpdatePos()
+void User::UpdatePos(double dx, double dy)
 {
 	glLoadIdentity();
 	
 	//rotates and moves the camera
-	glRotatef(dy*mouseYsens, 1, 0, 0);
-	glRotatef(dx*mouseXsens, 0, 1, 0);
+	glRotatef(dy, 1, 0, 0);
+	glRotatef(dx, 0, 1, 0);
 	glRotatef(180 - terrainAngle*180/M_PI, 0, 1, 0);
 	
 	glTranslatef(-GetX(), -GetY(), -GetZ());
 }
 
-void User::MoveForward()
+void User::MoveForward(double dt, double dx, double dy)
 {
-  position.SetX(position.GetX() + 300.0/FPS*.1*speed*sin((dx*fabs(mouseXsens))*M_PI/180 + terrainAngle));
-	position.SetY(position.GetY() + 300.0/FPS*.1*speed*sin((dy*fabs(mouseYsens))*M_PI/180));
-	position.SetZ(position.GetZ() + 300.0/FPS*.1*speed*cos((dx*fabs(mouseXsens))*M_PI/180 + terrainAngle));
+  position.SetX(position.GetX() + 30*dt*speed*sin(dx + terrainAngle));
+	position.SetY(position.GetY() + 30*dt*speed*sin(dy));
+	position.SetZ(position.GetZ() + 30*dt*speed*cos(dx + terrainAngle));
 }
 
-void User::MoveBackward()
+void User::MoveBackward(double dt, double dx, double dy)
 {
-	position.SetX(position.GetX() - 300.0/FPS*.1*speed*sin((dx*fabs(mouseXsens))*M_PI/180 + terrainAngle));
-	position.SetY(position.GetY() - 300.0/FPS*.1*speed*sin((dy*fabs(mouseYsens))*M_PI/180));
-	position.SetZ(position.GetZ() - 300.0/FPS*.1*speed*cos((dx*fabs(mouseXsens))*M_PI/180 + terrainAngle));
+	position.SetX(position.GetX() - 30*dt*speed*sin(dx + terrainAngle));
+	position.SetY(position.GetY() - 30*dt*speed*sin(dy));
+	position.SetZ(position.GetZ() - 30*dt*speed*cos(dx + terrainAngle));
 }
 
-void User::StrafeLeft()
+void User::StrafeLeft(double dt, double dx, double dy)
 {
-	position.SetX(position.GetX() + 300.0/FPS*.1*speed*cos((dx*fabs(mouseXsens))*M_PI/180 + terrainAngle));
-	position.SetZ(position.GetZ() - 300.0/FPS*.1*speed*sin((dx*fabs(mouseXsens))*M_PI/180 + terrainAngle));
+	position.SetX(position.GetX() + 30*dt*speed*cos(dx + terrainAngle));
+	position.SetZ(position.GetZ() - 30*dt*speed*sin(dx + terrainAngle));
 }
 
-void User::StrafeRight()
+void User::StrafeRight(double dt, double dx, double dy)
 {
-	position.SetX(position.GetX() - 300.0/FPS*.1*speed*cos((dx*fabs(mouseXsens))*M_PI/180 + terrainAngle));
-	position.SetZ(position.GetZ() + 300.0/FPS*.1*speed*sin((dx*fabs(mouseXsens))*M_PI/180 + terrainAngle));
+	position.SetX(position.GetX() - 30*dt*speed*cos(dx + terrainAngle));
+	position.SetZ(position.GetZ() + 30*dt*speed*sin(dx + terrainAngle));
 }
 
 double User::GetX()
@@ -87,11 +83,13 @@ float User::GetRad()
 void User::Crouch()
 {
 	height = 4;
+  speed = .4;
 }
 
 void User::Uncrouch()
 {
 	height = 6;
+  speed = 1;
 }
 
 void User::SetX(double x)
@@ -112,4 +110,24 @@ void User::SetZ(double z)
 const Point3D& User::GetPosition()
 {
   return position;
+}
+
+bool User::IsJumping()
+{
+  return isJumping;
+}
+
+void User::SetJumping(bool val)
+{
+  isJumping = val;
+}
+
+bool User::IsOnBox()
+{
+  return isOnBox;
+}
+
+void User::SetOnBox(bool val)
+{
+  isOnBox = val;
 }

@@ -4,7 +4,6 @@
 #include "User.h"
 #include <math.h>
 
-extern bool jumped;
 extern User player;
 extern float yVel;
 extern float jumpHeight;
@@ -86,8 +85,8 @@ void Box::draw(float FPS)
 		{
 			if(yVel <= 0)
 			{
-				jumped = false;
-				player.OnBox = true;
+        player.SetJumping(false);
+				player.SetOnBox(true);
 				player.SetY(y + ylen/2 + player.GetHeight());
 				yVel = 0;
 				if(side == 0)
@@ -101,11 +100,11 @@ void Box::draw(float FPS)
 
 			}
 		}
-		else if(player.OnBox)
+		else if(player.IsOnBox())
 		{
-			jumped = true;
+			player.SetJumping(true);
 			player.SetY(y + ylen/2 + player.GetHeight());
-			player.OnBox = false;
+			player.SetOnBox(false);
 			jumpHeight = y + ylen/2 + player.GetHeight();
 		}
 		else

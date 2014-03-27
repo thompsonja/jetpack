@@ -70,7 +70,6 @@ to be outside of the terrain.
 bool stretchTerrainTexture = false;
 int width=1280, height=960;			//initial window values
 float FPS = 100;
-float speed = 1;
 
 bool failureSound = false;
 bool passedSound = false;
@@ -128,7 +127,6 @@ int skySpeed = 50;	//affects sky speed.
 int waterSpeed = 100;				//how fast water oscillates
 
 float jumpFactor = 0;
-bool jumped = 0;
 float jumpHeight;					//height in which the user jumps
 float g = -90;
 float yVel = 0;
@@ -1007,13 +1005,11 @@ void draw2d()
 }
 
 //updates the camera position
-void camera()
+void UpdateCamera()
 {
   //updates the light position, making it stationary relative to the terrain
   GLfloat LightPosition[]= {map->height*XLEN, 5*(maxHeight - minHeight), map->width*ZLEN, 1.0f};
   glLightfv(GL_LIGHT0, GL_POSITION, LightPosition);
-
-  player.UpdatePos();
 }
 
 float setHeight()
@@ -1074,12 +1070,12 @@ void jump(float FPS, float terrainHeight)
       else
       {
         yVel = 0;
-        jumped = false;
+        player.SetJumping(false);
       }
     }
     else
     {
-      jumped = false;
+      player.SetJumping(false);
       jumpFactor = terrainHeight - jumpHeight;
     }
 
@@ -1168,7 +1164,9 @@ void display(SDL_Window *window)
   if(box.Exists())
     drawBox();
 
-  camera();			//positions the camera correctly
+  UpdateCamera();	//positions the camera correctly
+
+  player.UpdatePos(dx*mouseXsens, dy*mouseYsens);
 
   draw2d();
 
@@ -1606,11 +1604,11 @@ int main(int argc, char **argv)
         if(event.key.keysym.sym == SDLK_q)
           running = false;
         if(event.key.keysym.sym == SDLK_SPACE)
-          if(!jumped)
+          if(!player.IsJumping())
           {
             jumpHeight = player.GetY();
             yVel = 50;
-            jumped = true;
+            player.SetJumping(true);
           }
           break;			
       case SDL_KEYUP:		//A key has been released
@@ -1652,25 +1650,23 @@ int main(int argc, char **argv)
     }
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
     if(keys[SDL_SCANCODE_W])
-      player.MoveForward();
+      player.MoveForward(1.0 / FPS, dx*fabs(mouseXsens)*M_PI/180, dy*fabs(mouseYsens)*M_PI/180);
     if(keys[SDL_SCANCODE_S])
-      player.MoveBackward();
+      player.MoveBackward(1.0 / FPS, dx*fabs(mouseXsens)*M_PI/180, dy*fabs(mouseYsens)*M_PI/180);
     if(keys[SDL_SCANCODE_A])
-      player.StrafeLeft();
+      player.StrafeLeft(1.0 / FPS, dx*fabs(mouseXsens)*M_PI/180, dy*fabs(mouseYsens)*M_PI/180);
     if(keys[SDL_SCANCODE_D])
-      player.StrafeRight();
+      player.StrafeRight(1.0 / FPS, dx*fabs(mouseXsens)*M_PI/180, dy*fabs(mouseYsens)*M_PI/180);
     if(keys[SDL_SCANCODE_LCTRL])
     {
-      if(!jumped)
+      if(!player.IsJumping())
       {
         player.Crouch();
-        speed = .4f;
       }
     }
     else
     {
       player.Uncrouch();
-      speed = 1;
     }
 
     if(player.GetX() < 0)
@@ -1712,7 +1708,7 @@ int main(int argc, char **argv)
     for(int i = 0; i < 50; i++)
       heightTemp += elev[i];
 
-    if(!jumped)
+    if(!player.IsJumping())
     {
       jumpFactor = 0;
       player.SetY(heightTemp/50);
