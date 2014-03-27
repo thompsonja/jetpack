@@ -924,14 +924,6 @@ void drawSuns()
   glDisable(GL_TEXTURE_2D);
 }
 
-void drawRings()
-{
-  for(unsigned int i = 0; i < rings.size(); i++)
-  {
-    rings[i]->drawRing(FPS);
-  }
-}
-
 void drawBox()
 {
   if(glIsEnabled(GL_LIGHTING))
@@ -951,16 +943,6 @@ void drawFog()
   glHint(GL_FOG_HINT, GL_NICEST);			// Fog Hint Value
   glFogf(GL_FOG_START, 0);				// Fog Start
   glFogf(GL_FOG_END  , skyRadius);		// Fog End
-}
-
-//sets the material properties for lighting
-void setLight(Light light)
-{
-  glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_AMBIENT, light.ambient );
-  glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_DIFFUSE, light.diffuse );
-  glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_SPECULAR, light.specular );
-  glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_SPECULAR, light.emission );
-  glMaterialf ( GL_FRONT/*_AND_BACK*/, GL_SHININESS, light.shininess );
 }
 
 void drawLight()
@@ -1178,7 +1160,10 @@ void display(SDL_Window *window)
     glCallList(lightList[2]);
   drawObjects();		//draw objects
 
-  drawRings();
+  for(unsigned int i = 0; i < rings.size(); i++)
+  {
+    rings[i]->drawRing(FPS);
+  }
 
   if(box.Exists())
     drawBox();
@@ -1460,37 +1445,37 @@ void Initialize(SDL_Window *window)
   //setting call lists for changing material properties
   lightList[0] = glGenLists(1);
   glNewList(lightList[0], GL_COMPILE);
-  setLight(landlight);
+  landlight.SetGlLight();
   glEndList();
 
   lightList[1] = glGenLists(1);
   glNewList(lightList[1], GL_COMPILE);
-  setLight(waterlight);
+  waterlight.SetGlLight();
   glEndList();
 
   lightList[2] = glGenLists(1);
   glNewList(lightList[2], GL_COMPILE);
-  setLight(objectlight);
+  objectlight.SetGlLight();
   glEndList();
 
   lightList[3] = glGenLists(1);
   glNewList(lightList[3], GL_COMPILE);
-  setLight(billboardlight);
+  billboardlight.SetGlLight();
   glEndList();
 
   lightList[4] = glGenLists(1);
   glNewList(lightList[4], GL_COMPILE);
-  setLight(ringlighta);
+  ringlighta.SetGlLight();
   glEndList();
 
   lightList[5] = glGenLists(1);
   glNewList(lightList[5], GL_COMPILE);
-  setLight(ringlightb);
+  ringlightb.SetGlLight();
   glEndList();
 
   lightList[6] = glGenLists(1);
   glNewList(lightList[6], GL_COMPILE);
-  setLight(boxlight);
+  boxlight.SetGlLight();
   glEndList();
 
   glEnable(GL_LIGHTING);

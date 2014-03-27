@@ -88,6 +88,7 @@
     <ClCompile Include="EnergyBar.cpp" />
     <ClCompile Include="Environment.cpp" />
     <ClCompile Include="Image.cpp" />
+    <ClCompile Include="Light.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="SphereRing.cpp" />
