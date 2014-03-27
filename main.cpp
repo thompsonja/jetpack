@@ -63,12 +63,9 @@ to be outside of the terrain.
 #include "Model.h"
 #include <vector>
 
-const double PI = 3.14159265358979323846;
-
-#define TILED 0						//tile the terrain texture, applying it to each quad
-#define STRETCHED 1					//stretch the whole texture over the entire terrain
 #define MAXBILLBOARDS 20			//max billboards per texture
 
+bool stretchTerrainTexture = false;
 int width=1280, height=960;			//initial window values
 float FPS = 100;
 float speed = 1;
@@ -124,12 +121,7 @@ int whatButton = 0;					//what mouse button is clicked
 //variables affecting how fast things are animated (alter these according to system speed)
 int animationSpeed = 5;				//affects animation speed for objects, etc. (lower = faster)
 
-int skySpeed = 50;	//affects sky speed.  Even though the project description
-//said to rotate it X degrees per render, as determined
-//by the environment file, this tended to cause it to rotate
-//hundreds of revolutions per second, so I don't want to cause
-//seizures in people viewing this on faster computers
-//(lower = faster)
+int skySpeed = 50;	//affects sky speed.
 
 int waterSpeed = 100;				//how fast water oscillates
 
@@ -155,12 +147,10 @@ int curTexture = 5;					//which texture to associate with the billboard
 //sun variables
 int whichSun = 0;					//which sun to render (based on random seed)
 
-
 //other variables
 float terrainAngle;					//represents the initial angle to look at, for a square
 //map this should be pi/4 radians
 float scaleFactor = 1;				//how much to scale objects/billboards
-int tileTerrain = TILED;			//change this variable to make the terrain STRETCHED or TILED
 
 float*** normals;					//like terrain, but holds normal vector for each quad
 float*** averageNormals;			//holds average normal vector for each vertex
@@ -170,35 +160,22 @@ int bmpx, bmpy;						//stores image width and height when textures are loaded
 
 char *environmentFile = "environment.txt"; //the environment file to be read in
 
-User player;
-
-SphereRing *firstRing, *lastRing, *currentRing, *sphRing;
-
-Box box(8, 3, 8, 10, 10, 10);
-
-std::vector<Model*> models;
-
 //image struct used to store the heightmap
-typedef struct 
+struct image_type
 {
   double **grayValues;	//read in from the .pgm and later converted to actual heights
   int width;
   int height;
-} image_type;
-
-image_type *map;
+};
 
 //billboard type for billboards defined in the environment file
-typedef struct billboard
+struct Billboard
 {
   int texNumber;									//the texture index for textures[]
   int numOfBoards;								//how many billboards from env. file
   int xpos[MAXBILLBOARDS], zpos[MAXBILLBOARDS];
   int width, height;
-  struct billboard *next, *previous;
-} billboard;
-
-billboard *firstBillboard, *lastBillboard, *currentBillboard, *bb; //these are used for the linked list, like in hw1
+};
 
 //light type used for setting material properties
 typedef struct light_t
@@ -211,6 +188,13 @@ typedef struct light_t
 } light_t;
 
 light_t landlight, waterlight, objectlight, billboardlight, ringlighta, ringlightb, boxlight;
+
+std::vector<Model*> models;
+std::vector<SphereRing*> rings;
+std::vector<Billboard*> billboards;
+User player;
+Box box(8, 3, 8, 10, 10, 10);
+image_type *map;
 
 //Load bmps and convert to textures
 bool loadTextures(char *filename, int i)		
@@ -253,29 +237,23 @@ bool loadTextures(char *filename, int i)
 void billboardInsert(char *name, char *filename, int coords[MAXBILLBOARDS][2], int count)
 {
   printf("	Loading billboard . . . . . . ");
-  billboard *temp = (billboard *)malloc(sizeof(billboard));
-  temp->texNumber = curTexture;					//set the billboard texture number to curTexture
-  temp->numOfBoards = count;						//how many billboards are listed in the line in the env. file
+  Billboard *newBillboard = new Billboard();
+  newBillboard->texNumber = curTexture;					//set the billboard texture number to curTexture
+  newBillboard->numOfBoards = count;						//how many billboards are listed in the line in the env. file
 
-  if(loadTextures(filename, temp->texNumber))		//if it loads the texture correctly
+  if(loadTextures(filename, newBillboard->texNumber))		//if it loads the texture correctly
   {
+    newBillboard->width = bmpx;
+    newBillboard->height = bmpy;
+
     for(int i = 0; i < count; i++)
     {
-      //inserts the billboard into the linked list
-      temp->width = bmpx;
-      temp->height = bmpy;
-      temp->xpos[i] = coords[i][0];
-      temp->zpos[i] = coords[i][1];
-
-      temp->previous = currentBillboard;
-      temp->next = lastBillboard;
-      currentBillboard->next = temp;
-      currentBillboard = currentBillboard->next;
-      currentBillboard->next = lastBillboard;
-      lastBillboard->previous = currentBillboard;
+      newBillboard->xpos[i] = coords[i][0];
+      newBillboard->zpos[i] = coords[i][1];
     }
 
     curTexture++;
+    billboards.push_back(newBillboard);
   }
   else
   {
@@ -560,7 +538,8 @@ void read_environment(char *filename)
         //scan in the rotation angle
         sscanf(temp + sizeof(char)*i, "%d", &skydomeAngle);
         angle = skydomeAngle;	//set angle to skydomeAngle, since angle is what's actually going to be increased
-        if(skyExists = loadTextures(param1, 2))
+        skyExists = loadTextures(param1, 2);
+        if(skyExists)
           printf("DONE\n");	//load texture
         else
           printf("FAILED\n\t\tCould not open texture: %s\n", param1);
@@ -645,8 +624,7 @@ void read_environment(char *filename)
         i++;
 
       sscanf(temp + sizeof(char)*i, "%d %d %d %f %d %f %f", &x, &y, &z, &ang, &num, &sphRad, &rRad);
-      SphereRing ring(x, y, z, ang, num, sphRad, rRad);
-      ring.insert();
+      rings.push_back(new SphereRing(x, y, z, ang, num, sphRad, rRad));
 
       printf("DONE\n");
     }
@@ -808,8 +786,9 @@ void drawBillboards()
   glEnable(GL_TEXTURE_2D);
 
   //draws all the billboards
-  for(bb = firstBillboard->next; bb!= lastBillboard; bb = bb->next)
+  for(unsigned int i = 0; i < billboards.size(); i++)
   {
+    Billboard *bb = billboards[i];
     glBindTexture(GL_TEXTURE_2D, texture[bb->texNumber]);
 
     //draws each billboard from the line in the env. file
@@ -818,7 +797,7 @@ void drawBillboards()
       //gets the vector between the camera and the billboard, and calculates the angle
       lookAt[0] = (bb->xpos[k] - 1)*XLEN - player.getX(); //x component of lookAt vector
       lookAt[1] = (bb->zpos[k] - 1)*ZLEN - player.getZ(); //z component of lookAt vector
-      angle = atan(lookAt[0]/lookAt[1])*180/PI;
+      angle = atan(lookAt[0]/lookAt[1])*180/M_PI;
 
       //this takes care of sign issues
       if (player.getZ() > (bb->zpos[k] - 1)*ZLEN)
@@ -880,69 +859,32 @@ void drawTerrain()
   glDisable(GL_TEXTURE_2D);
 }
 
+void drawTerrainVertex(int x, int z, float texCoord1, float texCoord2)
+{
+  glNormal3fv(averageNormals[x][z]);
+  if(!textureExists)
+    glColor3f(0, 0, (map->grayValues[x][z] - minHeight)/(maxHeight - minHeight));
+  else if(stretchTerrainTexture)
+    glTexCoord2f((float)x/map->height, (float)z/map->width);
+  else
+    glTexCoord2f(texCoord1, texCoord2);
+  glVertex3f(x*XLEN, map->grayValues[x][z], z*ZLEN);
+}
+
 void drawTerrainList()
 {
-  int x, z;
-
   //begin drawing the terrain
   glBegin(GL_QUADS);
   //for each quad, the normal vector is set, and depending on the existance of a texture,
   //either the texture coordinate or color coordinate is set, followed by the vertex itself
-  for (x = 0; x < map->height - 1; x++)
+  for (int x = 0; x < map->height - 1; x++)
   {
-    for (z = 0; z < map->width - 1; z++)
-    {			
-      // draw vertex 0
-      glNormal3fv(averageNormals[x][z]);
-      if(!textureExists)
-        glColor3f(0, 0, (map->grayValues[x][z] - minHeight)/(maxHeight - minHeight));
-      else
-      {
-        if(tileTerrain == STRETCHED)
-          glTexCoord2f((float)x/map->height, (float)z/map->width);
-        else
-          glTexCoord2f(0.0f, 0.0f);
-      }
-      glVertex3f(x*XLEN, map->grayValues[x][z], z*ZLEN);
-
-      // draw vertex 1
-      glNormal3fv(averageNormals[x][z+1]);
-      if(!textureExists)
-        glColor3f(0, 0, (map->grayValues[x][z+1] - minHeight)/(maxHeight - minHeight));
-      else
-      {
-        if(tileTerrain == STRETCHED)
-          glTexCoord2f((float)x/map->height, (float)(z+1)/map->width);
-        else
-          glTexCoord2f(0.0f, 1.0f);
-      }
-      glVertex3f(x*XLEN, map->grayValues[x][z+1], (z+1)*ZLEN);
-
-      // draw vertex 2
-      glNormal3fv(averageNormals[x+1][z+1]);
-      if(!textureExists)
-        glColor3f(0, 0, (map->grayValues[x+1][z+1] - minHeight)/(maxHeight - minHeight));
-      else
-      {
-        if(tileTerrain == STRETCHED)
-          glTexCoord2f((float)(x+1)/map->height, (float)(z+1)/map->width);
-        else
-          glTexCoord2f(1.0f, 1.0f);
-      }
-      glVertex3f((x+1)*XLEN, map->grayValues[x+1][z+1], (z+1)*ZLEN);
-
-      // draw vertex 3
-      glNormal3fv(averageNormals[x+1][z]);
-      if(!textureExists)
-        glColor3f(0, 0, (map->grayValues[x+1][z] - minHeight)/(maxHeight - minHeight));
-      else
-      {
-        if(tileTerrain == STRETCHED)
-          glTexCoord2f((float)(x+1)/map->height, (float)z/map->width);
-        else
-          glTexCoord2f(1.0f, 0.0f);
-      }
-      glVertex3f((x+1)*XLEN, map->grayValues[x+1][z], z*ZLEN);
+    for (int z = 0; z < map->width - 1; z++)
+    {	
+      drawTerrainVertex(x,z,0,0);     // draw vertex 0
+      drawTerrainVertex(x,z+1,0,1);   // draw vertex 1
+      drawTerrainVertex(x+1,z+1,1,1); // draw vertex 2
+      drawTerrainVertex(x+1,z,1,0);   // draw vertex 3
     }
   }
   glEnd();
@@ -1086,12 +1028,12 @@ void drawSuns()
   lookAt[0] = map->height*XLEN - player.getX();			//x component of lookAt vector
   lookAt[1] = 3*(maxHeight - minHeight) - player.getY();	//y component of lookAt vector
   lookAt[2] = map->width*ZLEN - player.getZ();			//z component of lookAt vector
-  xzAngle = atan(lookAt[0]/lookAt[2])*180/PI;			//calculate angle on xz plane
+  xzAngle = atan(lookAt[0]/lookAt[2])*180/M_PI;			//calculate angle on xz plane
   if (player.getZ() > (map->width*ZLEN))					//accounts for sign issues with atan
     xzAngle += 180;
 
   //billboarding in the y direction
-  yAngle = atan(lookAt[1]/sqrt(pow(lookAt[0], 2) + pow(lookAt[2], 2)))*180/PI;
+  yAngle = atan(lookAt[1]/sqrt(pow(lookAt[0], 2) + pow(lookAt[2], 2)))*180/M_PI;
 
   glPushMatrix();
   //moves and rotates the sun to have billboarding effect
@@ -1125,10 +1067,10 @@ void drawRings()
 {
   SphereRing::ringsPassed = 0;
 
-  for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
+  for(unsigned int i = 0; i < rings.size(); i++)
   {
-    sphRing->drawRing(FPS);
-    if(sphRing->isPassed())
+    rings[i]->drawRing(FPS);
+    if(rings[i]->isPassed())
       SphereRing::ringsPassed++;
   }
 }
@@ -1280,9 +1222,9 @@ void jump(float FPS, float terrainHeight, int ringsPassed)
 
     if(player.healthBar.getLength() == 0)
     {
-      for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
+      for(unsigned int i = 0; i < rings.size(); i++)
       {
-        sphRing->setList(4);
+        rings[i]->setList(4);
       }
       player.healthBar.energyUp(FPS, player.healthBar.getMaxLength());
       SphereRing::ringsPassed = 0;
@@ -1307,9 +1249,9 @@ void jump(float FPS, float terrainHeight, int ringsPassed)
     {
       if(SphereRing::ringsPassed > 0)
         failureSound = true;
-      for(sphRing = firstRing->next; sphRing != lastRing; sphRing = sphRing->next)
+      for(unsigned int i = 0; i < rings.size(); i++)
       {
-        sphRing->setList(4);
+        rings[i]->setList(4);
       }
       SphereRing::ringsPassed = 0;
 
@@ -1324,7 +1266,6 @@ void display(SDL_Window *window)
 {
   GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
   GLboolean fog_enabled = glIsEnabled(GL_FOG);
-
 
   // clear screen and depth buffer
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1393,33 +1334,13 @@ void myinit(SDL_Window *window)
   float pointa[3], pointb[3], pointc[3];
   SphereRing *temp2;
 
-  //initialize the billboard list
-  firstBillboard = (billboard *)malloc(sizeof(billboard));
-  lastBillboard = (billboard *)malloc(sizeof(billboard));
-  firstBillboard->previous = NULL;
-  firstBillboard->next = lastBillboard;
-  currentBillboard = firstBillboard;
-  lastBillboard->previous = currentBillboard;
-  lastBillboard->next = NULL;
-
-  //initialize the billboard list
-  firstRing = (SphereRing *)malloc(sizeof(SphereRing));
-  lastRing = (SphereRing *)malloc(sizeof(SphereRing));
-  firstRing->previous = NULL;
-  firstRing->next = lastRing;
-  currentRing = firstRing;
-  lastRing->previous = currentRing;
-  lastRing->next = NULL;
-
   read_environment(environmentFile); //read the environment file
 
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);		// clear to black
   glViewport(0, 0, width, height);
   glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 
-  skyRadius = sqrt(pow(map->height * XLEN, 2.0) + pow(map->width * ZLEN, 2.0)
-    + pow(3*(maxHeight - minHeight), 2.0f));
-
+  skyRadius = sqrt(pow(map->height * XLEN, 2.0) + pow(map->width * ZLEN, 2.0) + pow(3*(maxHeight - minHeight), 2.0f));
 
   //initialize the projection
   glMatrixMode(GL_PROJECTION);
@@ -1435,9 +1356,12 @@ void myinit(SDL_Window *window)
 
   //transforms grayValues into actual height values
   for (i = 0; i < map->height; i++)
+  {
     for (j = 0; j < map->width; j++)
-      map->grayValues[i][j] = (maxHeight - minHeight)*map->grayValues[i][j]/maxval
-      + minHeight;
+    {
+      map->grayValues[i][j] = (maxHeight - minHeight)*map->grayValues[i][j]/maxval + minHeight;
+    }
+  }
 
   //creates a 3D array to store normal vectors
   normals = (float ***)malloc((map->height)*sizeof(float**));
@@ -1445,278 +1369,278 @@ void myinit(SDL_Window *window)
   {
     normals[i] = (float **)malloc((map->width)*sizeof(float*));
     for (j = 0; j < map->width; j++)
+    {
       normals[i][j] = (float *)malloc(3*sizeof(float));
+    }
   }
 
   //initialized to 0 for easy calculations when averaging
   for (i = 0; i < map->height; i++)
+  {
     for (j = 0; j < map->width; j++)
     {
       normals[i][j][0] = 0;
       normals[i][j][1] = 0;
       normals[i][j][2] = 0;
     }
+  }
 
-    //fills the array with the normals
-    for (i = 0; i < map->height - 1; i++)
+  //fills the array with the normals
+  for (i = 0; i < map->height - 1; i++)
+  {
+    for (j = 0; j < map->width - 1; j++)
     {
-      for (j = 0; j < map->width - 1; j++)
-      {
-        //the normal is V0 X V1, where V0 is a vector represented by
-        //pointb - pointa, and V1 is pointc - pointa
-        pointa[0] = i * XLEN;
-        pointa[1] = map->grayValues[i][j];
-        pointa[2] = j * ZLEN;
+      //the normal is V0 X V1, where V0 is a vector represented by
+      //pointb - pointa, and V1 is pointc - pointa
+      pointa[0] = i * XLEN;
+      pointa[1] = map->grayValues[i][j];
+      pointa[2] = j * ZLEN;
 
-        pointb[0] = (i + 1) * XLEN;
-        pointb[1] = map->grayValues[i+1][j+1];
-        pointb[2] = (j + 1) * ZLEN;
+      pointb[0] = (i + 1) * XLEN;
+      pointb[1] = map->grayValues[i+1][j+1];
+      pointb[2] = (j + 1) * ZLEN;
 
-        pointc[0] = (i + 1) * XLEN;
-        pointc[1] = map->grayValues[i+1][j];
-        pointc[2] = j * ZLEN;
+      pointc[0] = (i + 1) * XLEN;
+      pointc[1] = map->grayValues[i+1][j];
+      pointc[2] = j * ZLEN;
 
-        getNormal(normals[i][j], pointa, pointb, pointc);
-      }
+      getNormal(normals[i][j], pointa, pointb, pointc);
     }
+  }
 
-    //creates a 3D array to store normal average vectors for each vertex
-    averageNormals = (float ***)malloc((map->height)*sizeof(float**));
-    for(i = 0; i < map->height; i++)
+  //creates a 3D array to store normal average vectors for each vertex
+  averageNormals = (float ***)malloc((map->height)*sizeof(float**));
+  for(i = 0; i < map->height; i++)
+  {
+    averageNormals[i] = (float **)malloc((map->width)*sizeof(float*));
+    for(j = 0; j < map->width; j++)
+      averageNormals[i][j] = (float *)malloc(3*sizeof(float));
+  }
+
+  averageNormal();	//fill the array with the average normals
+
+  //frees the memory allocated for float ***normals
+  for(i = 0; i < map->height; i++)
+  {
+    for(j = 0; j < map->width; j++)
+      free(normals[i][j]);
+    free(normals[i]);
+  }
+  free(normals);
+
+  //set material settings for the land and water
+  landlight.ambient[0] = 0.2f;
+  landlight.ambient[1] = 0.2f;
+  landlight.ambient[2] = 0.2f;
+  landlight.ambient[3] = 1.0f;
+  landlight.diffuse[0] = 0.0f;
+  landlight.diffuse[1] = 0.5f;
+  landlight.diffuse[2] = 0.0f;
+  landlight.diffuse[3] = 1.0f;
+  landlight.specular[0] = 0.6f;
+  landlight.specular[1] = 0.6f;
+  landlight.specular[2] = 0.6f;
+  landlight.specular[3] = 1.0f;
+  landlight.emission[0] = 0.1f;
+  landlight.emission[1] = 0.1f;
+  landlight.emission[2] = 0.1f;
+  landlight.emission[3] = 1.0f;
+  landlight.shininess = 15.0f;
+
+  waterlight.ambient[0] = 0.3f;
+  waterlight.ambient[1] = 0.3f;
+  waterlight.ambient[2] = 0.6f;
+  waterlight.ambient[3] = 1.0f;
+  waterlight.diffuse[0] = 0.0f;
+  waterlight.diffuse[1] = 0.0f;
+  waterlight.diffuse[2] = 1.0f;
+  waterlight.diffuse[3] = 0.4f;
+  waterlight.specular[0] = 0.0f;
+  waterlight.specular[1] = 0.0f;
+  waterlight.specular[2] = 1.0f;
+  waterlight.specular[3] = 1.0f;
+  waterlight.emission[0] = 0.0f;
+  waterlight.emission[1] = 0.0f;
+  waterlight.emission[2] = 1.0f;
+  waterlight.emission[3] = 1.0f;
+  waterlight.shininess = 30.0f;
+
+  objectlight.ambient[0] = 1.0f;
+  objectlight.ambient[1] = 0.75f;
+  objectlight.ambient[2] = 0.5f;
+  objectlight.ambient[3] = 1.0f;
+  objectlight.diffuse[0] = 1.0f;
+  objectlight.diffuse[1] = 0.75f;
+  objectlight.diffuse[2] = 0.5f;
+  objectlight.diffuse[3] = 1.0f;
+  objectlight.specular[0] = 1.0f;
+  objectlight.specular[1] = 1.0f;
+  objectlight.specular[2] = 1.0f;
+  objectlight.specular[3] = 1.0f;
+  objectlight.emission[0] = 1.0f;
+  objectlight.emission[1] = 1.0f;
+  objectlight.emission[2] = 1.0f;
+  objectlight.emission[3] = 1.0f;
+  objectlight.shininess = 5.0f;
+
+  billboardlight.ambient[0] = 0.4f;
+  billboardlight.ambient[1] = 1.0f;
+  billboardlight.ambient[2] = 0.4f;
+  billboardlight.ambient[3] = 1.0f;
+  billboardlight.diffuse[0] = 0.0f;
+  billboardlight.diffuse[1] = 1.0f;
+  billboardlight.diffuse[2] = 0.0f;
+  billboardlight.diffuse[3] = 1.0f;
+  billboardlight.specular[0] = 0.0f;
+  billboardlight.specular[1] = 1.0f;
+  billboardlight.specular[2] = 0.0f;
+  billboardlight.specular[3] = 1.0f;
+  billboardlight.emission[0] = 0.0f;
+  billboardlight.emission[1] = 1.0f;
+  billboardlight.emission[2] = 0.0f;
+  billboardlight.emission[3] = 1.0f;
+  billboardlight.shininess = 30.0f;
+
+  ringlighta.ambient[0] = 0.784f;
+  ringlighta.ambient[1] = 0.098f;
+  ringlighta.ambient[2] = 0.0f;
+  ringlighta.ambient[3] = 1.0f;
+  ringlighta.diffuse[0] = 0.784f;
+  ringlighta.diffuse[1] = 0.098f;
+  ringlighta.diffuse[2] = 0.0f;
+  ringlighta.diffuse[3] = 1.0f;
+  ringlighta.specular[0] = 1.0f;
+  ringlighta.specular[1] = 1.0f;
+  ringlighta.specular[2] = 1.0f;
+  ringlighta.specular[3] = 1.0f;
+  ringlighta.emission[0] = 1.0f;
+  ringlighta.emission[1] = 1.0f;
+  ringlighta.emission[2] = 1.0f;
+  ringlighta.emission[3] = 1.0f;
+  ringlighta.shininess = 5.0f;
+
+  ringlightb.ambient[0] = 0.0f;
+  ringlightb.ambient[1] = 0.784f;
+  ringlightb.ambient[2] = 0.0f;
+  ringlightb.ambient[3] = 1.0f;
+  ringlightb.diffuse[0] = 0.0f;
+  ringlightb.diffuse[1] = 0.784f;
+  ringlightb.diffuse[2] = 0.0f;
+  ringlightb.diffuse[3] = 1.0f;
+  ringlightb.specular[0] = 1.0f;
+  ringlightb.specular[1] = 1.0f;
+  ringlightb.specular[2] = 1.0f;
+  ringlightb.specular[3] = 1.0f;
+  ringlightb.emission[0] = 1.0f;
+  ringlightb.emission[1] = 1.0f;
+  ringlightb.emission[2] = 1.0f;
+  ringlightb.emission[3] = 1.0f;
+  ringlightb.shininess = 5.0f;
+
+  boxlight.ambient[0] = 1.0f;
+  boxlight.ambient[1] = 0.75f;
+  boxlight.ambient[2] = 0.5f;
+  boxlight.ambient[3] = 1.0f;
+  boxlight.diffuse[0] = 1.0f;
+  boxlight.diffuse[1] = 0.75f;
+  boxlight.diffuse[2] = 0.5f;
+  boxlight.diffuse[3] = 1.0f;
+  boxlight.specular[0] = 1.0f;
+  boxlight.specular[1] = 1.0f;
+  boxlight.specular[2] = 1.0f;
+  boxlight.specular[3] = 1.0f;
+  boxlight.emission[0] = 1.0f;
+  boxlight.emission[1] = 1.0f;
+  boxlight.emission[2] = 1.0f;
+  boxlight.emission[3] = 1.0f;
+  boxlight.shininess = 5.0f;
+
+  srand(time(NULL));	//seeds the random function
+
+  waterHeightMax = waterHeight + waterOsc;	//set up water heights
+  waterHeightMin = waterHeight - waterOsc;
+
+  oldY = height/2;
+
+  //determines what angle to look at initially
+  terrainAngle = atan((float)(map->height - 1)*XLEN/((map->width - 1)*ZLEN)); 
+
+  drawFog();			//initialize fog
+  drawLight();		//initialize water
+
+  //creates a call list for the terrain
+  terrainList = glGenLists(1);
+  glNewList(terrainList, GL_COMPILE);
+  drawTerrainList();
+  glEndList();
+
+  //creates a call list for the water
+  waterList = glGenLists(1);
+  glNewList(waterList, GL_COMPILE);
+  drawWaterList();
+  glEndList();
+
+  //creates call lists for each frame of each object
+  objectList = (GLuint *)malloc(models.size()*sizeof(GLuint));
+  for(unsigned int i = 0; i < models.size(); i++)
+  {
+    objectList[i] = glGenLists(models[i]->GetNumFrames());
+    for(j = 0; j < models[i]->GetNumFrames(); j++)
     {
-      averageNormals[i] = (float **)malloc((map->width)*sizeof(float*));
-      for(j = 0; j < map->width; j++)
-        averageNormals[i][j] = (float *)malloc(3*sizeof(float));
+      glNewList(objectList[i] + j, GL_COMPILE);
+      drawObjectList(i, j);
+      glEndList();
     }
+  }
 
-    averageNormal();	//fill the array with the average normals
+  //setting call lists for changing material properties
+  lightList[0] = glGenLists(1);
+  glNewList(lightList[0], GL_COMPILE);
+  setLight(landlight);
+  glEndList();
 
-    //frees the memory allocated for float ***normals
-    for(i = 0; i < map->height; i++)
-    {
-      for(j = 0; j < map->width; j++)
-        free(normals[i][j]);
-      free(normals[i]);
-    }
-    free(normals);
+  lightList[1] = glGenLists(1);
+  glNewList(lightList[1], GL_COMPILE);
+  setLight(waterlight);
+  glEndList();
 
-    //set material settings for the land and water
-    landlight.ambient[0] = 0.2f;
-    landlight.ambient[1] = 0.2f;
-    landlight.ambient[2] = 0.2f;
-    landlight.ambient[3] = 1.0f;
-    landlight.diffuse[0] = 0.0f;
-    landlight.diffuse[1] = 0.5f;
-    landlight.diffuse[2] = 0.0f;
-    landlight.diffuse[3] = 1.0f;
-    landlight.specular[0] = 0.6f;
-    landlight.specular[1] = 0.6f;
-    landlight.specular[2] = 0.6f;
-    landlight.specular[3] = 1.0f;
-    landlight.emission[0] = 0.1f;
-    landlight.emission[1] = 0.1f;
-    landlight.emission[2] = 0.1f;
-    landlight.emission[3] = 1.0f;
-    landlight.shininess = 15.0f;
+  lightList[2] = glGenLists(1);
+  glNewList(lightList[2], GL_COMPILE);
+  setLight(objectlight);
+  glEndList();
 
-    waterlight.ambient[0] = 0.3f;
-    waterlight.ambient[1] = 0.3f;
-    waterlight.ambient[2] = 0.6f;
-    waterlight.ambient[3] = 1.0f;
-    waterlight.diffuse[0] = 0.0f;
-    waterlight.diffuse[1] = 0.0f;
-    waterlight.diffuse[2] = 1.0f;
-    waterlight.diffuse[3] = 0.4f;
-    waterlight.specular[0] = 0.0f;
-    waterlight.specular[1] = 0.0f;
-    waterlight.specular[2] = 1.0f;
-    waterlight.specular[3] = 1.0f;
-    waterlight.emission[0] = 0.0f;
-    waterlight.emission[1] = 0.0f;
-    waterlight.emission[2] = 1.0f;
-    waterlight.emission[3] = 1.0f;
-    waterlight.shininess = 30.0f;
+  lightList[3] = glGenLists(1);
+  glNewList(lightList[3], GL_COMPILE);
+  setLight(billboardlight);
+  glEndList();
 
-    objectlight.ambient[0] = 1.0f;
-    objectlight.ambient[1] = 0.75f;
-    objectlight.ambient[2] = 0.5f;
-    objectlight.ambient[3] = 1.0f;
-    objectlight.diffuse[0] = 1.0f;
-    objectlight.diffuse[1] = 0.75f;
-    objectlight.diffuse[2] = 0.5f;
-    objectlight.diffuse[3] = 1.0f;
-    objectlight.specular[0] = 1.0f;
-    objectlight.specular[1] = 1.0f;
-    objectlight.specular[2] = 1.0f;
-    objectlight.specular[3] = 1.0f;
-    objectlight.emission[0] = 1.0f;
-    objectlight.emission[1] = 1.0f;
-    objectlight.emission[2] = 1.0f;
-    objectlight.emission[3] = 1.0f;
-    objectlight.shininess = 5.0f;
+  lightList[4] = glGenLists(1);
+  glNewList(lightList[4], GL_COMPILE);
+  setLight(ringlighta);
+  glEndList();
 
-    billboardlight.ambient[0] = 0.4f;
-    billboardlight.ambient[1] = 1.0f;
-    billboardlight.ambient[2] = 0.4f;
-    billboardlight.ambient[3] = 1.0f;
-    billboardlight.diffuse[0] = 0.0f;
-    billboardlight.diffuse[1] = 1.0f;
-    billboardlight.diffuse[2] = 0.0f;
-    billboardlight.diffuse[3] = 1.0f;
-    billboardlight.specular[0] = 0.0f;
-    billboardlight.specular[1] = 1.0f;
-    billboardlight.specular[2] = 0.0f;
-    billboardlight.specular[3] = 1.0f;
-    billboardlight.emission[0] = 0.0f;
-    billboardlight.emission[1] = 1.0f;
-    billboardlight.emission[2] = 0.0f;
-    billboardlight.emission[3] = 1.0f;
-    billboardlight.shininess = 30.0f;
+  lightList[5] = glGenLists(1);
+  glNewList(lightList[5], GL_COMPILE);
+  setLight(ringlightb);
+  glEndList();
 
-    ringlighta.ambient[0] = 0.784f;
-    ringlighta.ambient[1] = 0.098f;
-    ringlighta.ambient[2] = 0.0f;
-    ringlighta.ambient[3] = 1.0f;
-    ringlighta.diffuse[0] = 0.784f;
-    ringlighta.diffuse[1] = 0.098f;
-    ringlighta.diffuse[2] = 0.0f;
-    ringlighta.diffuse[3] = 1.0f;
-    ringlighta.specular[0] = 1.0f;
-    ringlighta.specular[1] = 1.0f;
-    ringlighta.specular[2] = 1.0f;
-    ringlighta.specular[3] = 1.0f;
-    ringlighta.emission[0] = 1.0f;
-    ringlighta.emission[1] = 1.0f;
-    ringlighta.emission[2] = 1.0f;
-    ringlighta.emission[3] = 1.0f;
-    ringlighta.shininess = 5.0f;
+  lightList[6] = glGenLists(1);
+  glNewList(lightList[6], GL_COMPILE);
+  setLight(boxlight);
+  glEndList();
 
-    ringlightb.ambient[0] = 0.0f;
-    ringlightb.ambient[1] = 0.784f;
-    ringlightb.ambient[2] = 0.0f;
-    ringlightb.ambient[3] = 1.0f;
-    ringlightb.diffuse[0] = 0.0f;
-    ringlightb.diffuse[1] = 0.784f;
-    ringlightb.diffuse[2] = 0.0f;
-    ringlightb.diffuse[3] = 1.0f;
-    ringlightb.specular[0] = 1.0f;
-    ringlightb.specular[1] = 1.0f;
-    ringlightb.specular[2] = 1.0f;
-    ringlightb.specular[3] = 1.0f;
-    ringlightb.emission[0] = 1.0f;
-    ringlightb.emission[1] = 1.0f;
-    ringlightb.emission[2] = 1.0f;
-    ringlightb.emission[3] = 1.0f;
-    ringlightb.shininess = 5.0f;
+  glEnable(GL_LIGHTING);
+  SDL_WarpMouseInWindow(window, width/2, height/2);
+  SDL_ShowCursor (SDL_DISABLE);
 
-    boxlight.ambient[0] = 1.0f;
-    boxlight.ambient[1] = 0.75f;
-    boxlight.ambient[2] = 0.5f;
-    boxlight.ambient[3] = 1.0f;
-    boxlight.diffuse[0] = 1.0f;
-    boxlight.diffuse[1] = 0.75f;
-    boxlight.diffuse[2] = 0.5f;
-    boxlight.diffuse[3] = 1.0f;
-    boxlight.specular[0] = 1.0f;
-    boxlight.specular[1] = 1.0f;
-    boxlight.specular[2] = 1.0f;
-    boxlight.specular[3] = 1.0f;
-    boxlight.emission[0] = 1.0f;
-    boxlight.emission[1] = 1.0f;
-    boxlight.emission[2] = 1.0f;
-    boxlight.emission[3] = 1.0f;
-    boxlight.shininess = 5.0f;
+  player.jetPack.setPos(5, 5);
+  player.healthBar.setPos(5, 5 + player.healthBar.getMaxHeight());
+  //player.healthBar.setPos(5, 6 + height/40);
 
-    srand(time(NULL));	//seeds the random function
-
-    waterHeightMax = waterHeight + waterOsc;	//set up water heights
-    waterHeightMin = waterHeight - waterOsc;
-
-    oldY = height/2;
-
-    //determines what angle to look at initially
-    terrainAngle = atan((float)(map->height - 1)*XLEN/((map->width - 1)*ZLEN)); 
-
-    drawFog();			//initialize fog
-    drawLight();		//initialize water
-
-    //creates a call list for the terrain
-    terrainList = glGenLists(1);
-    glNewList(terrainList, GL_COMPILE);
-    drawTerrainList();
-    glEndList();
-
-    //creates a call list for the water
-    waterList = glGenLists(1);
-    glNewList(waterList, GL_COMPILE);
-    drawWaterList();
-    glEndList();
-
-    //creates call lists for each frame of each object
-    objectList = (GLuint *)malloc(models.size()*sizeof(GLuint));
-    for(unsigned int i = 0; i < models.size(); i++)
-    {
-      objectList[i] = glGenLists(models[i]->GetNumFrames());
-      for(j = 0; j < models[i]->GetNumFrames(); j++)
-      {
-        glNewList(objectList[i] + j, GL_COMPILE);
-        drawObjectList(i, j);
-        glEndList();
-      }
-    }
-
-    //setting call lists for changing material properties
-    lightList[0] = glGenLists(1);
-    glNewList(lightList[0], GL_COMPILE);
-    setLight(landlight);
-    glEndList();
-
-    lightList[1] = glGenLists(1);
-    glNewList(lightList[1], GL_COMPILE);
-    setLight(waterlight);
-    glEndList();
-
-    lightList[2] = glGenLists(1);
-    glNewList(lightList[2], GL_COMPILE);
-    setLight(objectlight);
-    glEndList();
-
-    lightList[3] = glGenLists(1);
-    glNewList(lightList[3], GL_COMPILE);
-    setLight(billboardlight);
-    glEndList();
-
-    lightList[4] = glGenLists(1);
-    glNewList(lightList[4], GL_COMPILE);
-    setLight(ringlighta);
-    glEndList();
-
-    lightList[5] = glGenLists(1);
-    glNewList(lightList[5], GL_COMPILE);
-    setLight(ringlightb);
-    glEndList();
-
-    lightList[6] = glGenLists(1);
-    glNewList(lightList[6], GL_COMPILE);
-    setLight(boxlight);
-    glEndList();
-
-    glEnable(GL_LIGHTING);
-    SDL_WarpMouseInWindow(window, width/2, height/2);
-    SDL_ShowCursor (SDL_DISABLE);
-
-    player.jetPack.setPos(5, 5);
-    player.healthBar.setPos(5, 5 + player.healthBar.getMaxHeight());
-    //player.healthBar.setPos(5, 6 + height/40);
-
-    temp2 = (SphereRing *)malloc(sizeof(SphereRing));
-    for(temp2 = firstRing->next; temp2 != lastRing; temp2 = temp2->next)
-      temp2->drawList();
-
-    free(temp2);
-
-    bb = (billboard *)malloc(sizeof(billboard));
-    sphRing = (SphereRing *)malloc(sizeof(SphereRing));
+  for(unsigned int i = 0; i < rings.size(); i++)
+  {
+    rings[i]->drawList();
+  }
 }
 
 int main(int argc, char **argv)

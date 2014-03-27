@@ -32,11 +32,11 @@ Model::Model(AnimationType type, char *baseFilename) :
     char buffer[256];
     int fileCounter = 1;
     //calculates how many files are in a row
-    for(sprintf(buffer, "%s%.2d%s%c", rootName, fileCounter, ".mod", '\0'); 
+    for(sprintf(buffer, "%s%.2d.mod\0", rootName, fileCounter); 
       (fopen(buffer, "r") != NULL); )
     {
       fileCounter++;
-      sprintf(buffer, "%s%.2d%s%c", rootName, fileCounter, ".mod", '\0');
+      sprintf(buffer, "%s%.2d.mod\0", rootName, fileCounter);
     }
     //fileCounter will end up being one more than the number of files, so reduce it by one
     numTotalFrames = fileCounter-1;
@@ -49,7 +49,7 @@ Model::Model(AnimationType type, char *baseFilename) :
     //this is the same as for the static case, but this does it for each file
     for(int i = 0; i < numTotalFrames; i++)
     {
-      sprintf(buffer, "%s%.2d%s%c", rootName, i+1, ".mod", '\0');
+      sprintf(buffer, "%s%.2d%s\0", rootName, i+1, ".mod");
       valid = LoadFrame(i, buffer);
       if(!valid)
         return;

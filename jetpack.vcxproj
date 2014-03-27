@@ -85,6 +85,7 @@
   <ItemGroup>
     <ClCompile Include="Box.cpp" />
     <ClCompile Include="EnergyBar.cpp" />
+    <ClCompile Include="Environment.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="SphereRing.cpp" />
@@ -93,6 +94,7 @@
   <ItemGroup>
     <ClInclude Include="Box.h" />
     <ClInclude Include="EnergyBar.h" />
+    <ClInclude Include="Environment.h" />
     <ClInclude Include="Model.h" />
     <ClInclude Include="Point.h" />
     <ClInclude Include="SphereRing.h" />

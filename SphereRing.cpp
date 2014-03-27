@@ -26,29 +26,6 @@ SphereRing::SphereRing(int x, int y, int z, float ang, int num, float sphRad, fl
 	SphereRing::numOfRings++;
 }
 
-void SphereRing::insert()
-{
-	SphereRing *temp;
-	temp = (SphereRing *)malloc(sizeof(SphereRing));
-
-	temp->numOfSpheres = numOfSpheres;
-	temp->angle = angle;
-	temp->sphereRad = sphereRad;
-	temp->ringRad = ringRad;
-	temp->ringX = ringX;
-	temp->ringY = ringY;
-	temp->ringZ = ringZ;
-	temp->whichList = 4;
-	temp->tempAngle = 0;
-	
-	temp->previous = currentRing;
-	temp->next = lastRing;
-	currentRing->next = temp;
-	currentRing = currentRing->next;
-	currentRing->next = lastRing;
-	lastRing->previous = currentRing;
-}
-
 void SphereRing::drawList()
 {
 	GLUquadricObj *quadratic;
