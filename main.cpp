@@ -61,9 +61,11 @@ to be outside of the terrain.
 #include "SphereRing.h"
 #include "Box.h"
 #include "Model.h"
+#include "Billboard.h"
+#include "Image.h"
+#include "Light.h"
 #include <vector>
 
-#define MAXBILLBOARDS 20			//max billboards per texture
 
 bool stretchTerrainTexture = false;
 int width=1280, height=960;			//initial window values
@@ -160,41 +162,14 @@ int bmpx, bmpy;						//stores image width and height when textures are loaded
 
 char *environmentFile = "environment.txt"; //the environment file to be read in
 
-//image struct used to store the heightmap
-struct image_type
-{
-  double **grayValues;	//read in from the .pgm and later converted to actual heights
-  int width;
-  int height;
-};
-
-//billboard type for billboards defined in the environment file
-struct Billboard
-{
-  int texNumber;									//the texture index for textures[]
-  int numOfBoards;								//how many billboards from env. file
-  int xpos[MAXBILLBOARDS], zpos[MAXBILLBOARDS];
-  int width, height;
-};
-
-//light type used for setting material properties
-typedef struct light_t
-{
-  float ambient[4];
-  float diffuse[4];
-  float specular[4];
-  float emission[4];
-  float shininess;
-} light_t;
-
-light_t landlight, waterlight, objectlight, billboardlight, ringlighta, ringlightb, boxlight;
+Light landlight, waterlight, objectlight, billboardlight, ringlighta, ringlightb, boxlight;
 
 std::vector<Model*> models;
 std::vector<SphereRing*> rings;
 std::vector<Billboard*> billboards;
 User player;
 Box box(8, 3, 8, 10, 10, 10);
-image_type *map;
+Image *map;
 
 //Load bmps and convert to textures
 bool loadTextures(char *filename, int i)		
@@ -273,68 +248,7 @@ void objInsert(Model::AnimationType type, char *name, int x, int z)
   }
 }
 
-//creates an image_type
-image_type *new_image(image_type *image, int w, int h, int max)
-{
-  int i;
-
-  image->width = w;
-  image->height = h;
-  maxval = max;
-
-  //creates a 2D array to store grayscale values
-  image->grayValues = (double **)malloc(h*sizeof(double*));
-  for (i = 0; i < h; i++)
-    image->grayValues[i] = (double *)malloc(w*sizeof(double));
-
-  return image;
-}
-
-//reads an image_type
-image_type *read_image(image_type *image, char *filename)
-{
-  int i, j;
-  FILE *inf;
-  char temp[256];
-  int width, height,color;
-  inf = fopen(filename, "r+");
-  //some error handling
-  if((inf = fopen(filename, "r+")) == NULL)
-  {
-    printf("Unable to open pgm file: %s!\n", filename);
-    exit(1);
-  }
-  if(fscanf(inf, " P2 "))
-  {
-    printf("not a valid pgm: %s!\n",filename);
-    exit(1);
-  }
-
-  fgets(temp, 128 * sizeof(char), inf);
-  while(temp[0] == '#')						//skips commented lines
-    fgets(temp, 128 * sizeof(char), inf);
-
-  sscanf(temp, "%d %d", &width, &height);		//scans for width, height
-  fscanf(inf, "%d", &maxval);					//and maxval
-
-  //creates an image_type based on information in the .pgm file
-  image = new_image(image, width, height, maxval);
-
-  //fills the 2D array with grayscale vlues from .pgm file
-  for(i=image->height - 1; i >= 0; i--)
-  {
-    for(j=0; j<image->width; j++)
-    {
-      fscanf(inf, "%d ", &color);
-      image->grayValues[i][j] = (double) color;
-    }
-  }
-  fclose(inf);
-
-  return image;
-}
-
-//reads the environment file from myinit()
+//reads the environment file from Initialize()
 void read_environment(char *filename)
 {
   char keyword[10];
@@ -379,8 +293,8 @@ void read_environment(char *filename)
           param1[j] = temp[i];
         param1[j] = '\0';
 
-        map = (image_type *)malloc(sizeof(image_type)); //create a map image
-        map = read_image(map, param1); //read the map image
+        map = new Image(param1);
+        maxval = map->maxval;
 
         //scans for minHeight and maxHeight
         sscanf(temp + sizeof(char)*i, "%f %f", &minHeight, &maxHeight);
@@ -647,6 +561,23 @@ void quit()
     free(averageNormals[i]);
   }
   free(averageNormals);
+  
+  for(unsigned int i = 0; i < models.size(); i++)
+  {
+    delete models[i];
+  }
+  for(unsigned int i = 0; i < rings.size(); i++)
+  {
+    delete rings[i];
+  }
+  for(unsigned int i = 0; i < billboards.size(); i++)
+  {
+    delete billboards[i];
+  }
+  models.clear();
+  rings.clear();
+  billboards.clear();
+
   SDL_Quit();
   exit(1);
 }
@@ -779,70 +710,13 @@ void drawObjectList(int modelNum, int frame)
 
 void drawBillboards()
 {
-  int k;
-  float angle;
-  float lookAt[2]; //vector between the camera and the billboard, projected to the xz axis
-
   glEnable(GL_TEXTURE_2D);
-
   //draws all the billboards
   for(unsigned int i = 0; i < billboards.size(); i++)
   {
     Billboard *bb = billboards[i];
     glBindTexture(GL_TEXTURE_2D, texture[bb->texNumber]);
-
-    //draws each billboard from the line in the env. file
-    for(k = 0; k < bb->numOfBoards; k++)
-    {
-      //gets the vector between the camera and the billboard, and calculates the angle
-      lookAt[0] = (bb->xpos[k] - 1)*XLEN - player.getX(); //x component of lookAt vector
-      lookAt[1] = (bb->zpos[k] - 1)*ZLEN - player.getZ(); //z component of lookAt vector
-      angle = atan(lookAt[0]/lookAt[1])*180/M_PI;
-
-      //this takes care of sign issues
-      if (player.getZ() > (bb->zpos[k] - 1)*ZLEN)
-        angle = 180 + angle;
-
-      //move the billboard into position and scales it
-      glPushMatrix();
-      glTranslatef((bb->xpos[k] - 1)*XLEN, map->grayValues[bb->xpos[k] - 1][bb->zpos[k] - 1],
-        (bb->zpos[k] - 1)*ZLEN);
-      glScalef(scaleFactor, scaleFactor, scaleFactor);
-      //note that the rotation angle is such that the billboard isn't facing straight at you, but at
-      //a 45 degree angle, and two such rectangles are used.  It kind of looks like: viewer---->X
-      //where the X represents the two crossing billboards and the arrow is the line of sight.
-      glRotatef(angle + 45, 0, 1, 0);
-
-      //draw the first rectangle, I have the rectangles be essentially the size of the quad
-      glBegin(GL_QUADS);
-      glTexCoord2f(1.0f, 0.0f);
-      glNormal3f(0, 0, -1);
-      glVertex3f(-(float)XLEN/2, 0, 0);
-
-      glTexCoord2f(1.0f, 1.0f);
-      glVertex3f(-(float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
-
-      glTexCoord2f(0.0f, 1.0f);
-      glVertex3f((float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
-
-      glTexCoord2f(0.0f, 0.0f);
-      glVertex3f((float)XLEN/2, 0, 0);
-      glEnd();
-
-      //rotate and draw the second rectangle
-      glRotatef(-90, 0, 1, 0);
-      glBegin(GL_QUADS);
-      glTexCoord2f(1.0f, 0.0f);
-      glVertex3f(-(float)XLEN/2, 0, 0);
-      glTexCoord2f(1.0f, 1.0f);
-      glVertex3f(-(float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
-      glTexCoord2f(0.0f, 1.0f);
-      glVertex3f((float)XLEN/2, XLEN*(float)bb->height/bb->width, 0);
-      glTexCoord2f(0.0f, 0.0f);
-      glVertex3f((float)XLEN/2, 0, 0);
-      glEnd();
-      glPopMatrix();
-    }
+    bb->Draw(1 / FPS, XLEN, ZLEN, scaleFactor, map, player.GetPosition());
   }
   glDisable(GL_TEXTURE_2D);
 }
@@ -896,7 +770,7 @@ void drawWater()
 
   //sign tells you whether or not you are above or under the water,
   //I use it to show the water level when below the water
-  sign = (player.getY() - waterHeight)/fabs((player.getY() - waterHeight));
+  sign = (player.GetY() - waterHeight)/fabs((player.GetY() - waterHeight));
 
   glColor4f(1.0f, 1.0f, 1.0f, 0.4f);	//basically sets alpha level to .4
   glNormal3f(0.0, sign, 0.0);		//normal depends on whether you are above or below water
@@ -906,19 +780,6 @@ void drawWater()
 
   glPushMatrix();
   glTranslatef(0, waterHeight, 0);
-  /*
-  glBegin(GL_QUADS);
-  glTexCoord2f(0.0, 0.0);
-  glVertex3f(0, 0, 0);
-  glTexCoord2f(0.0, 1.0);
-  glVertex3f(0, 0, map->width*ZLEN);
-  glTexCoord2f(1.0, 1.0);
-  glVertex3f(map->height*XLEN, 0, map->width*ZLEN);
-  glTexCoord2f(1.0, 0.0);
-  glVertex3f(map->height*XLEN, 0, 0);
-  glEnd();
-
-  */	
   glCallList(waterList);
 
   glPopMatrix();
@@ -930,7 +791,7 @@ void drawWater()
   glDisable(GL_TEXTURE_2D);
 }
 
-//called in myinit to set up the call list for water
+//called in Initialize to set up the call list for water
 void drawWaterList()
 {
   int x, z;
@@ -1025,11 +886,11 @@ void drawSuns()
   }
   glBindTexture(GL_TEXTURE_2D, texture[whichSun]);
 
-  lookAt[0] = map->height*XLEN - player.getX();			//x component of lookAt vector
-  lookAt[1] = 3*(maxHeight - minHeight) - player.getY();	//y component of lookAt vector
-  lookAt[2] = map->width*ZLEN - player.getZ();			//z component of lookAt vector
+  lookAt[0] = map->height*XLEN - player.GetX();			//x component of lookAt vector
+  lookAt[1] = 3*(maxHeight - minHeight) - player.GetY();	//y component of lookAt vector
+  lookAt[2] = map->width*ZLEN - player.GetZ();			//z component of lookAt vector
   xzAngle = atan(lookAt[0]/lookAt[2])*180/M_PI;			//calculate angle on xz plane
-  if (player.getZ() > (map->width*ZLEN))					//accounts for sign issues with atan
+  if (player.GetZ() > (map->width*ZLEN))					//accounts for sign issues with atan
     xzAngle += 180;
 
   //billboarding in the y direction
@@ -1082,7 +943,7 @@ void drawBox()
   box.draw(FPS);
 }
 
-//sets fog parameters, is called in myinit()
+//sets fog parameters, is called in Initialize()
 void drawFog()
 {
   GLuint	fogMode  [ ] = { GL_EXP, GL_EXP2, GL_LINEAR };	// Storage For Three Types Of Fog
@@ -1097,7 +958,7 @@ void drawFog()
 }
 
 //sets the material properties for lighting
-void setLight(light_t light)
+void setLight(Light light)
 {
   glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_AMBIENT, light.ambient );
   glMaterialfv( GL_FRONT/*_AND_BACK*/, GL_DIFFUSE, light.diffuse );
@@ -1174,7 +1035,7 @@ void camera()
   GLfloat LightPosition[]= {map->height*XLEN, 5*(maxHeight - minHeight), map->width*ZLEN, 1.0f};
   glLightfv(GL_LIGHT0, GL_POSITION, LightPosition);
 
-  player.updatePos();
+  player.UpdatePos();
 }
 
 float setHeight()
@@ -1182,28 +1043,28 @@ float setHeight()
   int x, z;
   float d1;
 
-  x = floor(player.getX()/XLEN);
-  z = floor(player.getZ()/ZLEN);
+  x = floor(player.GetX()/XLEN);
+  z = floor(player.GetZ()/ZLEN);
 
   if(x == 127)
     x--;
 
   //left triangle
-  if((z + ZLEN - player.getZ()/ZLEN)*(float)XLEN/ZLEN > (x + XLEN - player.getX()/XLEN))
+  if((z + ZLEN - player.GetZ()/ZLEN)*(float)XLEN/ZLEN > (x + XLEN - player.GetX()/XLEN))
   {
-    d1 = (map->grayValues[x+1][z+1] - map->grayValues[x+1][z])/ZLEN * (player.getZ()/ZLEN - z)
-      +(map->grayValues[x][z] - map->grayValues[x+1][z])/XLEN * (XLEN - (player.getX()/XLEN - x))
+    d1 = (map->grayValues[x+1][z+1] - map->grayValues[x+1][z])/ZLEN * (player.GetZ()/ZLEN - z)
+      +(map->grayValues[x][z] - map->grayValues[x+1][z])/XLEN * (XLEN - (player.GetX()/XLEN - x))
       + map->grayValues[x+1][z];
   }
   //right triangle
   else
   {
-    d1 = (map->grayValues[x][z] - map->grayValues[x][z+1])/ZLEN * (ZLEN - (player.getZ()/ZLEN - z))
-      +(map->grayValues[x+1][z+1] - map->grayValues[x][z+1])/XLEN * (player.getX()/XLEN - x)
+    d1 = (map->grayValues[x][z] - map->grayValues[x][z+1])/ZLEN * (ZLEN - (player.GetZ()/ZLEN - z))
+      +(map->grayValues[x+1][z+1] - map->grayValues[x][z+1])/XLEN * (player.GetX()/XLEN - x)
       + map->grayValues[x][z+1];
   }
 
-  d1 = d1 + player.getHeight();//6 - crouchFactor;
+  d1 = d1 + player.GetHeight();//6 - crouchFactor;
 
   return d1;
 }
@@ -1328,12 +1189,8 @@ void display(SDL_Window *window)
 }
 
 //function to initialize the projection and some variables. 
-void myinit(SDL_Window *window)
+void Initialize(SDL_Window *window)
 {
-  int i, j;
-  float pointa[3], pointb[3], pointc[3];
-  SphereRing *temp2;
-
   read_environment(environmentFile); //read the environment file
 
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);		// clear to black
@@ -1355,9 +1212,9 @@ void myinit(SDL_Window *window)
   glEnable(GL_TEXTURE_2D);						//enable 2D texturing
 
   //transforms grayValues into actual height values
-  for (i = 0; i < map->height; i++)
+  for (int i = 0; i < map->height; i++)
   {
-    for (j = 0; j < map->width; j++)
+    for (int j = 0; j < map->width; j++)
     {
       map->grayValues[i][j] = (maxHeight - minHeight)*map->grayValues[i][j]/maxval + minHeight;
     }
@@ -1365,19 +1222,19 @@ void myinit(SDL_Window *window)
 
   //creates a 3D array to store normal vectors
   normals = (float ***)malloc((map->height)*sizeof(float**));
-  for (i = 0; i < map->height; i++)
+  for (int i = 0; i < map->height; i++)
   {
     normals[i] = (float **)malloc((map->width)*sizeof(float*));
-    for (j = 0; j < map->width; j++)
+    for (int j = 0; j < map->width; j++)
     {
       normals[i][j] = (float *)malloc(3*sizeof(float));
     }
   }
 
   //initialized to 0 for easy calculations when averaging
-  for (i = 0; i < map->height; i++)
+  for (int i = 0; i < map->height; i++)
   {
-    for (j = 0; j < map->width; j++)
+    for (int j = 0; j < map->width; j++)
     {
       normals[i][j][0] = 0;
       normals[i][j][1] = 0;
@@ -1386,10 +1243,12 @@ void myinit(SDL_Window *window)
   }
 
   //fills the array with the normals
-  for (i = 0; i < map->height - 1; i++)
+  for (int i = 0; i < map->height - 1; i++)
   {
-    for (j = 0; j < map->width - 1; j++)
+    for (int j = 0; j < map->width - 1; j++)
     {
+      float pointa[3], pointb[3], pointc[3];
+
       //the normal is V0 X V1, where V0 is a vector represented by
       //pointb - pointa, and V1 is pointc - pointa
       pointa[0] = i * XLEN;
@@ -1410,19 +1269,21 @@ void myinit(SDL_Window *window)
 
   //creates a 3D array to store normal average vectors for each vertex
   averageNormals = (float ***)malloc((map->height)*sizeof(float**));
-  for(i = 0; i < map->height; i++)
+  for(int i = 0; i < map->height; i++)
   {
     averageNormals[i] = (float **)malloc((map->width)*sizeof(float*));
-    for(j = 0; j < map->width; j++)
+    for(int j = 0; j < map->width; j++)
+    {
       averageNormals[i][j] = (float *)malloc(3*sizeof(float));
+    }
   }
 
   averageNormal();	//fill the array with the average normals
 
   //frees the memory allocated for float ***normals
-  for(i = 0; i < map->height; i++)
+  for(int i = 0; i < map->height; i++)
   {
-    for(j = 0; j < map->width; j++)
+    for(int j = 0; j < map->width; j++)
       free(normals[i][j]);
     free(normals[i]);
   }
@@ -1585,7 +1446,7 @@ void myinit(SDL_Window *window)
   for(unsigned int i = 0; i < models.size(); i++)
   {
     objectList[i] = glGenLists(models[i]->GetNumFrames());
-    for(j = 0; j < models[i]->GetNumFrames(); j++)
+    for(int j = 0; j < models[i]->GetNumFrames(); j++)
     {
       glNewList(objectList[i] + j, GL_COMPILE);
       drawObjectList(i, j);
@@ -1709,7 +1570,7 @@ int main(int argc, char **argv)
     return -1;
   }
 
-  myinit(window);
+  Initialize(window);
 
   heightTemp = map->grayValues[0][0] * 50;
 
@@ -1759,7 +1620,7 @@ int main(int argc, char **argv)
         if(event.key.keysym.sym == SDLK_SPACE)
           if(!jumped)
           {
-            jumpHeight = player.getY();
+            jumpHeight = player.GetY();
             yVel = 50;
             jumped = true;
           }
@@ -1803,37 +1664,35 @@ int main(int argc, char **argv)
     }
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
     if(keys[SDL_SCANCODE_W])
-      player.moveForward();
+      player.MoveForward();
     if(keys[SDL_SCANCODE_S])
-      player.moveBackward();
+      player.MoveBackward();
     if(keys[SDL_SCANCODE_A])
-      player.strafeLeft();
+      player.StrafeLeft();
     if(keys[SDL_SCANCODE_D])
-      player.strafeRight();
+      player.StrafeRight();
     if(keys[SDL_SCANCODE_LCTRL])
     {
       if(!jumped)
       {
-        player.crouch();
-        //crouchFactor = 2;
+        player.Crouch();
         speed = .4f;
       }
     }
     else
     {
-      player.uncrouch();
-      //crouchFactor = 0;
+      player.Uncrouch();
       speed = 1;
     }
 
-    if(player.getX() < 0)
-      player.setX(0);
-    if(player.getX() > XLEN*(map->height - 1))
-      player.setX(XLEN*(map->height - 1));
-    if(player.getZ() < 0)
-      player.setZ(0);
-    if(player.getZ() > ZLEN*(map->width - 1))
-      player.setZ(ZLEN*(map->width - 1));
+    if(player.GetX() < 0)
+      player.SetX(0);
+    if(player.GetX() > XLEN*(map->height - 1))
+      player.SetX(XLEN*(map->height - 1));
+    if(player.GetZ() < 0)
+      player.SetZ(0);
+    if(player.GetZ() > ZLEN*(map->width - 1))
+      player.SetZ(ZLEN*(map->width - 1));
 
     if(player.jetPack.getLength() == 0)
     {
@@ -1868,16 +1727,16 @@ int main(int argc, char **argv)
     if(!jumped)
     {
       jumpFactor = 0;
-      player.setY(heightTemp/50);
+      player.SetY(heightTemp/50);
     }
     else
     {
       jump(FPS, heightTemp/50, SphereRing::ringsPassed);
-      player.setY(jumpHeight + jumpFactor);
+      player.SetY(jumpHeight + jumpFactor);
     }
 
-    if(player.getY() < heightTemp/50)
-      player.setY(heightTemp/50);
+    if(player.GetY() < heightTemp/50)
+      player.SetY(heightTemp/50);
 
     if(failureSound)
     {

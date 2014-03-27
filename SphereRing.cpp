@@ -59,8 +59,9 @@ void SphereRing::drawRing(float FPS)
 	gluQuadricOrientation(quadratic, GLU_OUTSIDE);
 	gluQuadricNormals(quadratic, GLU_SMOOTH);
 
-	if((fabs(player.getX() - ringX*XLEN) < ringRad) && (fabs(player.getY() - ringY) < ringRad)
-					&& (fabs(player.getZ() - ringZ*ZLEN) < sphereRad))
+	if((fabs(player.GetX() - ringX*XLEN) < ringRad) && 
+     (fabs(player.GetY() - ringY)      < ringRad) && 
+     (fabs(player.GetZ() - ringZ*ZLEN) < sphereRad))
 	{
 		if(whichList == 4)
 		{

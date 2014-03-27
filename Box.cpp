@@ -80,58 +80,58 @@ void Box::draw(float FPS)
 			side = 0;
 	}
 
-	if(fabs(player.getY() - (y + ylen/2)) < player.getHeight())
+	if(fabs(player.GetY() - (y + ylen/2)) < player.GetHeight())
 	{
-		if(fabs(player.getZ() - z) < zlen/2 && fabs(player.getX() - x) < xlen/2)
+		if(fabs(player.GetZ() - z) < zlen/2 && fabs(player.GetX() - x) < xlen/2)
 		{
 			if(yVel <= 0)
 			{
 				jumped = false;
-				player.onBox = true;
-				player.setY(y + ylen/2 + player.getHeight());
+				player.OnBox = true;
+				player.SetY(y + ylen/2 + player.GetHeight());
 				yVel = 0;
 				if(side == 0)
-					player.setX(player.getX() + 30/FPS);
+					player.SetX(player.GetX() + 30/FPS);
 				if(side == 1)
-					player.setZ(player.getZ() + 30/FPS);
+					player.SetZ(player.GetZ() + 30/FPS);
 				if(side == 2)
-					player.setX(player.getX() - 30/FPS);
+					player.SetX(player.GetX() - 30/FPS);
 				if(side == 3)
-					player.setZ(player.getZ() - 30/FPS);
+					player.SetZ(player.GetZ() - 30/FPS);
 
 			}
 		}
-		else if(player.onBox)
+		else if(player.OnBox)
 		{
 			jumped = true;
-			player.setY(y + ylen/2 + player.getHeight());
-			player.onBox = false;
-			jumpHeight = y + ylen/2 + player.getHeight();
+			player.SetY(y + ylen/2 + player.GetHeight());
+			player.OnBox = false;
+			jumpHeight = y + ylen/2 + player.GetHeight();
 		}
 		else
 		{
-			if(fabs(player.getZ() - z) < zlen/2)
+			if(fabs(player.GetZ() - z) < zlen/2)
 			{
-				if((player.getX() - x > - xlen/2 - player.getRad()) && (player.getX() - x < 0))
+				if((player.GetX() - x > - xlen/2 - player.GetRad()) && (player.GetX() - x < 0))
 				{
-					player.setX(x - xlen/2 - player.getRad());
+					player.SetX(x - xlen/2 - player.GetRad());
 				}
-				else if(player.getX() - x < xlen/2 + player.getRad())
+				else if(player.GetX() - x < xlen/2 + player.GetRad())
 				{
-					if(player.getX() - x > 0)
-						player.setX(x + xlen/2 + player.getRad());
+					if(player.GetX() - x > 0)
+						player.SetX(x + xlen/2 + player.GetRad());
 				}
 			}
-			if(fabs(player.getX() - x) < xlen/2)
+			if(fabs(player.GetX() - x) < xlen/2)
 			{
-				if((player.getZ() - z > - zlen/2 - player.getRad()) && (player.getZ() - z < 0))
+				if((player.GetZ() - z > - zlen/2 - player.GetRad()) && (player.GetZ() - z < 0))
 				{
-					player.setZ(z - zlen/2 - player.getRad());
+					player.SetZ(z - zlen/2 - player.GetRad());
 				}
-				else if(player.getZ() - z < zlen/2 + player.getRad())
+				else if(player.GetZ() - z < zlen/2 + player.GetRad())
 				{
-					if(player.getZ() - z > 0)
-						player.setZ(z + zlen/2 + player.getRad());
+					if(player.GetZ() - z > 0)
+						player.SetZ(z + zlen/2 + player.GetRad());
 				}
 			}
 		}

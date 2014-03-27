@@ -2,35 +2,35 @@
 #define USER_H
 
 #include "EnergyBar.h"
+#include "Point.h"
 
 class User
 {
-private:
-	float x;
-	float y;
-	float z;
-	float height;
-	float rad;
 public:
 	User();
 	EnergyBar healthBar;
 	EnergyBar jetPack;
-	void updatePos();
-	void moveForward();
-	void moveBackward();
-	void strafeLeft();
-	void strafeRight();
-	float getX();
-	float getY();
-	float getZ();
-	float getHeight();
-	float getRad();
-	void crouch();
-	void uncrouch();
-	void setX(float x);
-	void setY(float y);
-	void setZ(float z);
-	bool onBox;
+	void  UpdatePos();
+	void  MoveForward();
+	void  MoveBackward();
+	void  StrafeLeft();
+	void  StrafeRight();
+	double GetX();
+	double GetY();
+	double GetZ();
+	float GetHeight();
+	float GetRad();
+	void Crouch();
+	void Uncrouch();
+	void SetX(double x);
+	void SetY(double y);
+	void SetZ(double z);
+	bool OnBox;
+  const Point3D& GetPosition();
+private:
+  Point3D position;
+	float height;
+	float rad;
 };
 
 #endif

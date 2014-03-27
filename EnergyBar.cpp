@@ -62,7 +62,7 @@ void EnergyBar::energyDown(float FPS, float amount)
 			if(!jumped)
 			{
 				jumped = true;
-				jumpHeight = player.getY();
+				jumpHeight = player.GetY();
 				yVel = 10;
 			}
 		}
