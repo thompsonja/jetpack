@@ -145,7 +145,7 @@ void Box::setExistence(bool a)
 	exists = a;
 }
 
-int Box::isExistent()
+bool Box::Exists()
 {
 	return exists;
 }

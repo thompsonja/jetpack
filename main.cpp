@@ -926,13 +926,9 @@ void drawSuns()
 
 void drawRings()
 {
-  SphereRing::ringsPassed = 0;
-
   for(unsigned int i = 0; i < rings.size(); i++)
   {
     rings[i]->drawRing(FPS);
-    if(rings[i]->isPassed())
-      SphereRing::ringsPassed++;
   }
 }
 
@@ -1069,7 +1065,7 @@ float setHeight()
   return d1;
 }
 
-void jump(float FPS, float terrainHeight, int ringsPassed)
+void jump(float FPS, float terrainHeight)
 {
   jumpFactor += 1/FPS * yVel;
   yVel += 1/FPS * g;
@@ -1088,7 +1084,6 @@ void jump(float FPS, float terrainHeight, int ringsPassed)
         rings[i]->setList(4);
       }
       player.healthBar.energyUp(FPS, player.healthBar.getMaxLength());
-      SphereRing::ringsPassed = 0;
     }
     if(SDL_GetMouseState(NULL, NULL)&SDL_BUTTON(1))
     {
@@ -1106,20 +1101,28 @@ void jump(float FPS, float terrainHeight, int ringsPassed)
       jumpFactor = terrainHeight - jumpHeight;
     }
 
-    if(SphereRing::ringsPassed != SphereRing::numOfRings)
+    int ringsPassed = 0;
+    for(unsigned int i = 0; i < rings.size(); i++)
     {
-      if(SphereRing::ringsPassed > 0)
+      if(rings[i]->isPassed())
+      {
+        ringsPassed++;
+      }
+    }
+    bool allRingsPassed = ringsPassed == rings.size();
+    if(!allRingsPassed)
+    {
+      if(ringsPassed > 0)
+      {
         failureSound = true;
+      }
       for(unsigned int i = 0; i < rings.size(); i++)
       {
         rings[i]->setList(4);
       }
-      SphereRing::ringsPassed = 0;
-
-      box.setExistence(0);
     }
-    else
-      box.setExistence(1);
+    failureSound = !allRingsPassed && ringsPassed > 0;
+    box.setExistence(allRingsPassed);
   }
 }
 
@@ -1177,7 +1180,7 @@ void display(SDL_Window *window)
 
   drawRings();
 
-  if(box.isExistent())
+  if(box.Exists())
     drawBox();
 
   camera();			//positions the camera correctly
@@ -1731,7 +1734,7 @@ int main(int argc, char **argv)
     }
     else
     {
-      jump(FPS, heightTemp/50, SphereRing::ringsPassed);
+      jump(FPS, heightTemp/50);
       player.SetY(jumpHeight + jumpFactor);
     }
 

@@ -15,7 +15,7 @@ private:
 public:
 	Box(float xlen, float ylen, float zlen, float x, float y, float z);
 	void setExistence(bool a);
-	int isExistent();
+	bool Exists();
 	void draw(float FPS);
 };
 

@@ -9,9 +9,6 @@ extern bool passedSound;
 extern int XLEN;
 extern int ZLEN;
 
-int SphereRing::numOfRings = 0;
-int SphereRing::ringsPassed = 0;
-
 SphereRing::SphereRing(int x, int y, int z, float ang, int num, float sphRad, float rRad)
 {
 	numOfSpheres = num;
@@ -23,7 +20,6 @@ SphereRing::SphereRing(int x, int y, int z, float ang, int num, float sphRad, fl
 	ringZ = z;
 	tempAngle = 0;
 	whichList = 4;
-	SphereRing::numOfRings++;
 }
 
 void SphereRing::drawList()
@@ -96,7 +92,7 @@ void SphereRing::setList(int list)
 	whichList = list;
 }
 
-int SphereRing::isPassed()
+bool SphereRing::isPassed()
 {
-	return whichList - 4;
+	return whichList != 4;
 }

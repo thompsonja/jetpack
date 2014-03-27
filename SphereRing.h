@@ -11,9 +11,7 @@ public:
   void drawList();
   void drawRing(float FPS);
   void setList(int list);
-  int isPassed();
-  static int numOfRings;
-  static int ringsPassed;
+  bool isPassed();
 private:
   GLuint ringList;
   int numOfSpheres;
