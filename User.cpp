@@ -83,7 +83,7 @@ float User::GetRad()
 void User::Crouch()
 {
 	height = 4;
-  speed = .4;
+  speed = .4f;
 }
 
 void User::Uncrouch()

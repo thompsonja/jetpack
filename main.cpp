@@ -992,8 +992,8 @@ void draw2d()
   glVertex3f((float)width/2, height/2 - 9, 0.0f);
   glEnd();
 
-  player.jetPack.drawBar(width / 5, height / 40);
-  player.healthBar.drawBar(width / 5, height / 40);
+  player.jetPack.drawBar(5, 5, width / 5, height / 40);
+  player.healthBar.drawBar(5, 5 + height / 40, width / 5, height / 40);
 
   glPopMatrix();
   glMatrixMode(GL_PROJECTION);
@@ -1054,7 +1054,7 @@ void jump(float FPS, float terrainHeight)
       player.healthBar.energyDown((-yVel-100)/500);
     }
 
-    if(player.healthBar.getLength() == 0)
+    if(player.healthBar.IsEmpty())
     {
       for(unsigned int i = 0; i < rings.size(); i++)
       {
@@ -1064,7 +1064,7 @@ void jump(float FPS, float terrainHeight)
     }
     if(SDL_GetMouseState(NULL, NULL)&SDL_BUTTON(1))
     {
-      if(player.jetPack.getLength() != 0)
+      if(!player.jetPack.IsEmpty())
         yVel = 10;
       else
       {
@@ -1479,9 +1479,6 @@ void Initialize(SDL_Window *window)
   SDL_WarpMouseInWindow(window, width/2, height/2);
   SDL_ShowCursor (SDL_DISABLE);
 
-  player.jetPack.setPos(5, 5);
-  player.healthBar.setPos(5, 5 + height/40);
-
   for(unsigned int i = 0; i < rings.size(); i++)
   {
     rings[i]->drawList();
@@ -1676,7 +1673,7 @@ int main(int argc, char **argv)
     if(player.GetZ() > ZLEN*(map->width - 1))
       player.SetZ(ZLEN*(map->width - 1));
 
-    if(player.jetPack.getLength() == 0)
+    if(player.jetPack.IsEmpty())
     {
       Mix_HaltChannel(1);
     }
@@ -1684,7 +1681,7 @@ int main(int argc, char **argv)
     if(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT))
     {
       player.jetPack.energyDown(0.3/FPS);
-      if(player.jetPack.getLength() > 0)
+      if(!player.jetPack.IsEmpty())
       {
         yVel += 300/FPS * .48;
         if(!player.IsJumping())
