@@ -14,11 +14,10 @@ public:
 	EnergyBar();					//constructor
 	float getLength();
 	float getMaxLength();
-	float getMaxHeight();
 	void setPos(int xpos, int ypos);
-	void energyUp(float FPS, float amount);		//increases energy bar
-	void energyDown(float FPS, float amount);	//decreases energy bar
-	void drawBar();
+	void energyUp(float amount);   //increases energy bar
+	void energyDown(float amount); //decreases energy bar
+	void drawBar(int width, int height);
 };
 
 #endif

@@ -73,7 +73,6 @@ float FPS = 100;
 
 bool failureSound = false;
 bool passedSound = false;
-bool jetPackSound = false;
 
 //Texture array
 GLuint texture[10];					//storage for 10 textures
@@ -993,8 +992,8 @@ void draw2d()
   glVertex3f((float)width/2, height/2 - 9, 0.0f);
   glEnd();
 
-  player.jetPack.drawBar();
-  player.healthBar.drawBar();
+  player.jetPack.drawBar(width / 5, height / 40);
+  player.healthBar.drawBar(width / 5, height / 40);
 
   glPopMatrix();
   glMatrixMode(GL_PROJECTION);
@@ -1052,7 +1051,7 @@ void jump(float FPS, float terrainHeight)
   {
     if(yVel < -100)
     {
-      player.healthBar.energyDown(FPS, (-yVel - 100)/500);
+      player.healthBar.energyDown((-yVel-100)/500);
     }
 
     if(player.healthBar.getLength() == 0)
@@ -1061,7 +1060,7 @@ void jump(float FPS, float terrainHeight)
       {
         rings[i]->setList(4);
       }
-      player.healthBar.energyUp(FPS, player.healthBar.getMaxLength());
+      player.healthBar.energyUp(1.0);
     }
     if(SDL_GetMouseState(NULL, NULL)&SDL_BUTTON(1))
     {
@@ -1481,8 +1480,7 @@ void Initialize(SDL_Window *window)
   SDL_ShowCursor (SDL_DISABLE);
 
   player.jetPack.setPos(5, 5);
-  player.healthBar.setPos(5, 5 + player.healthBar.getMaxHeight());
-  //player.healthBar.setPos(5, 6 + height/40);
+  player.healthBar.setPos(5, 5 + height/40);
 
   for(unsigned int i = 0; i < rings.size(); i++)
   {
@@ -1681,23 +1679,27 @@ int main(int argc, char **argv)
     if(player.jetPack.getLength() == 0)
     {
       Mix_HaltChannel(1);
-      jetPackSound = false;
     }
 
     if(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT))
     {
-      player.jetPack.energyDown(FPS, 0);
-      if(jetPackSound)
+      player.jetPack.energyDown(0.3/FPS);
+      if(player.jetPack.getLength() > 0)
       {
+        yVel += 300/FPS * .48;
+        if(!player.IsJumping())
+        {
+          player.SetJumping(true);
+          jumpHeight = player.GetY();
+          yVel = 10;
+        }
         Mix_PlayChannel(1, jetpack, -1);
-        jetPackSound = false;
       }
     }
     else
     {
-      player.jetPack.energyUp(FPS, 0);
+      player.jetPack.energyUp(0.3/FPS);
       Mix_HaltChannel(1);
-      jetPackSound = true;
     }
 
     heightPrev = heightTemp/50;
