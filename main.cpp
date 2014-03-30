@@ -64,6 +64,7 @@ to be outside of the terrain.
 #include "Billboard.h"
 #include "Image.h"
 #include "Light.h"
+#include "Renderer.h"
 #include <vector>
 
 
@@ -166,7 +167,8 @@ std::vector<SphereRing*> rings;
 std::vector<Billboard*> billboards;
 User player;
 Box box(8, 3, 8, 10, 10, 10);
-Image *map;
+Image *map = NULL;
+Renderer *renderer = NULL;
 
 //Load bmps and convert to textures
 bool loadTextures(char *filename, int i)		
@@ -541,6 +543,10 @@ void read_environment(char *filename)
     }
   }
 
+  renderer = new Renderer(width, height);
+  renderer->healthBar = &player.healthBar;
+  renderer->jetpackBar = &player.jetPack;
+
   printf("Loading complete, executing program\n");
 
   fclose(f);
@@ -574,6 +580,8 @@ void quit()
   models.clear();
   rings.clear();
   billboards.clear();
+
+  delete renderer;
 
   SDL_Quit();
   exit(1);
@@ -791,12 +799,10 @@ void drawWater()
 //called in Initialize to set up the call list for water
 void drawWaterList()
 {
-  int x, z;
-
   glBegin(GL_QUADS);
-  for (x = 0; x < map->height - 1; x++)
+  for (int x = 0; x < map->height - 1; x++)
   {
-    for (z = 0; z < map->width - 1; z++)
+    for (int z = 0; z < map->width - 1; z++)
     {
       // draw vertex 0
       glTexCoord2f(0.0f, 0.0f);
@@ -992,8 +998,7 @@ void draw2d()
   glVertex3f((float)width/2, height/2 - 9, 0.0f);
   glEnd();
 
-  player.jetPack.drawBar(5, 5, width / 5, height / 40);
-  player.healthBar.drawBar(5, 5 + height / 40, width / 5, height / 40);
+  if(renderer) renderer->Render(1 / FPS);
 
   glPopMatrix();
   glMatrixMode(GL_PROJECTION);
@@ -1051,7 +1056,7 @@ void jump(float FPS, float terrainHeight)
   {
     if(yVel < -100)
     {
-      player.healthBar.energyDown((-yVel-100)/500);
+      player.healthBar.DecreaseEnergy((-yVel-100)/500);
     }
 
     if(player.healthBar.IsEmpty())
@@ -1060,7 +1065,7 @@ void jump(float FPS, float terrainHeight)
       {
         rings[i]->setList(4);
       }
-      player.healthBar.energyUp(1.0);
+      player.healthBar.IncreaseEnergy(1.0);
     }
     if(SDL_GetMouseState(NULL, NULL)&SDL_BUTTON(1))
     {
@@ -1680,7 +1685,7 @@ int main(int argc, char **argv)
 
     if(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT))
     {
-      player.jetPack.energyDown(0.3/FPS);
+      player.jetPack.DecreaseEnergy(0.3/FPS);
       if(!player.jetPack.IsEmpty())
       {
         yVel += 300/FPS * .48;
@@ -1695,7 +1700,7 @@ int main(int argc, char **argv)
     }
     else
     {
-      player.jetPack.energyUp(0.3/FPS);
+      player.jetPack.IncreaseEnergy(0.3/FPS);
       Mix_HaltChannel(1);
     }
 

@@ -1,26 +1,19 @@
 #ifndef ENERGYBAR_H
 #define ENERGYBAR_H
 
-//class for the jetpack energy meter
 class EnergyBar
 {
 public:
-	EnergyBar();					//constructor
-	float getLength();
-	float getMaxLength();
-	void energyUp(float amount);
-	void energyDown(float amount);
-  void drawBar(int x, int y, int width, int height);
+	EnergyBar(double maxEnergy = 1.0);
+  double GetEnergy(){return energy;}
+  double GetMaxEnergy(){return maxEnergy;}
+	void IncreaseEnergy(double amount);
+	void DecreaseEnergy(double amount);
   bool IsEmpty();
   bool IsFull();
 private:
-  int maxLength; //length of bar
-  int maxHeight; //height of bar
-  float length;  //how full the bar is
-  int xpos;      //x pos of bar
-  int ypos;      //y pos of bar
-  bool empty;
-  bool full;
+  double maxEnergy; // Maximum amount of energy that can be held
+  double energy;  // current amount of energy in bar
 };
 
 #endif

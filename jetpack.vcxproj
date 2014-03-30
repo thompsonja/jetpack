@@ -91,6 +91,7 @@
     <ClCompile Include="Light.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Model.cpp" />
+    <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="SphereRing.cpp" />
     <ClCompile Include="User.cpp" />
   </ItemGroup>
@@ -103,6 +104,7 @@
     <ClInclude Include="Light.h" />
     <ClInclude Include="Model.h" />
     <ClInclude Include="Point.h" />
+    <ClInclude Include="Renderer.h" />
     <ClInclude Include="SphereRing.h" />
     <ClInclude Include="User.h" />
   </ItemGroup>
