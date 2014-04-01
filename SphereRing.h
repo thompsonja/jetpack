@@ -3,15 +3,15 @@
 
 #include <Windows.h>
 #include <glut.h>
-
-class Point3D;
+#include "Point.h"
 
 class SphereRing
 {
 public:
-	SphereRing(int x, int y, int z, double rotationRate, int num, double sphRad, double rRad);
+	SphereRing(const Point3D &position, double rotationRate, int num, double sphRad, double rRad);
   void drawList();
   bool UpdatePassedStatus(const Point3D &playerPosition);
+  void UpdateRotation(double dt);
   void drawRing(double dt);
   void setList(int list);
   bool isPassed();
@@ -19,16 +19,16 @@ public:
   int GetNumSpheres(){return numSpheres;}
   double GetSphereRadius(){return sphereRadius;}
   double GetRingRadius(){return ringRadius;}
+  const Point3D& GetPosition(){return ringPosition;}
+  double GetRotation(){return rotation;}
 private:
   GLuint ringList;
   int numSpheres;
   double sphereRadius;
   double ringRadius;
   double rotationRate;
-  double tempAngle;
-  int ringX;
-  int ringY;
-  int ringZ;
+  double rotation;
+  Point3D ringPosition;
   int whichList;
 };
 

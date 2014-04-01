@@ -537,7 +537,7 @@ void read_environment(char *filename)
         i++;
 
       sscanf(temp + sizeof(char)*i, "%d %d %d %f %d %f %f", &x, &y, &z, &ang, &num, &sphRad, &rRad);
-      rings.push_back(new SphereRing(x, y, z, ang, num, sphRad, rRad));
+      rings.push_back(new SphereRing(Point3D(x, y, z), ang, num, sphRad, rRad));
 
       printf("DONE\n");
     }
@@ -1165,6 +1165,7 @@ void display(SDL_Window *window)
     bool newlyPassed = rings[i]->UpdatePassedStatus(player.GetPosition());
     if(newlyPassed) passedSound = true;
     rings[i]->drawRing(1/FPS);
+    rings[i]->UpdateRotation(1/FPS);
   }
 
   if(box.Exists())

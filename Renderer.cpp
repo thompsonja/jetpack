@@ -3,6 +3,9 @@
 #include "SphereRing.h"
 #include "Point.h"
 
+extern int XLEN;
+extern int ZLEN;
+
 Renderer::Renderer(int width, int height) :
   width(width),
   height(height)
@@ -85,40 +88,34 @@ void Renderer::DrawEnergyBar(EnergyBar *bar, int x, int y, int width, int height
 
  void Renderer::DrawSphereRings(double dt, const Point3D &playerPosition)
  {
-   //for(std::map<SphereRing*, GLuint>::iterator i = ringLists.begin(); i != ringLists.end(); i++)
-   //{
-   //  float theta = 360.0/i->first->GetNumSpheres();
-   //  GLUquadricObj *quadratic;
+   for(std::map<SphereRing*, GLuint>::iterator i = ringLists.begin(); i != ringLists.end(); i++)
+   {
+     SphereRing *ring = i->first;
+     if(ring == NULL)
+     {
+       // TODO error
+       continue;
+     }
 
-   //  quadratic=gluNewQuadric();	
-   //  gluQuadricOrientation(quadratic, GLU_OUTSIDE);
-   //  gluQuadricNormals(quadratic, GLU_SMOOTH);
+     GLUquadricObj *quadratic;
 
-   //  if((fabs(playerPosition.GetX() - ringX*XLEN) < ringRad) && 
-   //     (fabs(playerPosition.GetY() - ringY)      < ringRad) && 
-   //     (fabs(playerPosition.GetZ() - ringZ*ZLEN) < sphereRad))
-   //  {
-   //    i->first->SetPassed();
-   //  }
+     quadratic=gluNewQuadric();	
+     gluQuadricOrientation(quadratic, GLU_OUTSIDE);
+     gluQuadricNormals(quadratic, GLU_SMOOTH);
 
-   //  glDisable(GL_CULL_FACE);
+     glDisable(GL_CULL_FACE);
 
-   //  glPushMatrix();
+     glPushMatrix();
 
-   //  glTranslatef(ringX*XLEN, ringY, ringZ*ZLEN);
-   //  glRotatef(tempAngle, 0, 0, 1);
+     glTranslatef(ring->GetPosition().GetX()*XLEN, ring->GetPosition().GetY(), ring->GetPosition().GetZ()*ZLEN);
+     glRotatef(ring->GetRotation(), 0, 0, 1);
 
-   //  if(glIsEnabled(GL_LIGHTING))
-   //    glCallList(lightList[whichList]);
+     //if(glIsEnabled(GL_LIGHTING))
+     //  glCallList(lightList[whichList]);
 
-   //  glCallList(i->second);
-   //  glPopMatrix();
+     glCallList(i->second);
+     glPopMatrix();
 
-   //  tempAngle += angle * dt;
-
-   //  if (tempAngle > 360)
-   //    tempAngle -= 360;
-
-   //  glEnable(GL_CULL_FACE);
-   //}
+     glEnable(GL_CULL_FACE);
+   }
  }

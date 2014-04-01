@@ -1,21 +1,19 @@
 #include "SphereRing.h"
 #include "User.h"
-#include "Point.h"
+
 #include <math.h>
 
 extern GLuint lightList[7];
 extern int XLEN;
 extern int ZLEN;
 
-SphereRing::SphereRing(int x, int y, int z, double rotationRate, int num, double sphRad, double rRad) :
+SphereRing::SphereRing(const Point3D &position, double rotationRate, int num, double sphRad, double rRad) :
   numSpheres(num),
   sphereRadius(sphRad),
   ringRadius(rRad),
   rotationRate(rotationRate),
-  tempAngle(0),
-  ringX(x),
-  ringY(y),
-  ringZ(z),
+  rotation(0),
+  ringPosition(position),
   whichList(4)
 {
 }
@@ -46,15 +44,23 @@ void SphereRing::drawList()
 
 bool SphereRing::UpdatePassedStatus(const Point3D &playerPosition)
 {
-  bool currentlyPassed = ((fabs(playerPosition.GetX() - ringX*XLEN) < ringRadius) && 
-                          (fabs(playerPosition.GetY() - ringY)      < ringRadius) && 
-                          (fabs(playerPosition.GetZ() - ringZ*ZLEN) < sphereRadius));
+  bool currentlyPassed = ((fabs(playerPosition.GetX() - ringPosition.GetX()*XLEN) < ringRadius) && 
+                          (fabs(playerPosition.GetY() - ringPosition.GetY())      < ringRadius) && 
+                          (fabs(playerPosition.GetZ() - ringPosition.GetZ()*ZLEN) < sphereRadius));
   bool newlyPassed = currentlyPassed && !isPassed();
   if(newlyPassed)
   {
     SetPassed(true);
   }
   return newlyPassed;
+}
+
+void SphereRing::UpdateRotation(double dt)
+{
+  rotation += rotationRate * dt;
+
+  if (rotation > 360)
+    rotation -= 360;
 }
 
 void SphereRing::drawRing(double dt)
@@ -70,8 +76,8 @@ void SphereRing::drawRing(double dt)
 
 	glPushMatrix();
 
-	glTranslatef(ringX*XLEN, ringY, ringZ*ZLEN);
-	glRotatef(tempAngle, 0, 0, 1);
+	glTranslatef(ringPosition.GetX()*XLEN, ringPosition.GetY(), ringPosition.GetZ()*ZLEN);
+	glRotatef(rotation, 0, 0, 1);
 
 	if(glIsEnabled(GL_LIGHTING))
 		glCallList(lightList[whichList]);
@@ -79,10 +85,7 @@ void SphereRing::drawRing(double dt)
 	glCallList(ringList);
 	glPopMatrix();
 
-	tempAngle += rotationRate * dt;
-
-	if (tempAngle > 360)
-		tempAngle -= 360;
+  UpdateRotation(dt);
 
 	glEnable(GL_CULL_FACE);
 }
