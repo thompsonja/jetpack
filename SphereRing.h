@@ -4,21 +4,28 @@
 #include <Windows.h>
 #include <glut.h>
 
+class Point3D;
+
 class SphereRing
 {
 public:
-	SphereRing(int x, int y, int z, float ang, int num, float sphRad, float rRad);
+	SphereRing(int x, int y, int z, double rotationRate, int num, double sphRad, double rRad);
   void drawList();
-  void drawRing(float FPS);
+  bool UpdatePassedStatus(const Point3D &playerPosition);
+  void drawRing(double dt);
   void setList(int list);
   bool isPassed();
+  void SetPassed(bool passed);
+  int GetNumSpheres(){return numSpheres;}
+  double GetSphereRadius(){return sphereRadius;}
+  double GetRingRadius(){return ringRadius;}
 private:
   GLuint ringList;
-  int numOfSpheres;
-  float sphereRad;
-  float ringRad;
-  float angle;
-  float tempAngle;
+  int numSpheres;
+  double sphereRadius;
+  double ringRadius;
+  double rotationRate;
+  double tempAngle;
   int ringX;
   int ringY;
   int ringZ;

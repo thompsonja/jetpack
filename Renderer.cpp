@@ -1,7 +1,7 @@
 #include "Renderer.h"
 #include "EnergyBar.h"
-#include <Windows.h>
-#include <glut.h>
+#include "SphereRing.h"
+#include "Point.h"
 
 Renderer::Renderer(int width, int height) :
   width(width),
@@ -9,10 +9,15 @@ Renderer::Renderer(int width, int height) :
 {
 }
 
-void Renderer::Render(double dt)
+void Renderer::Render2D(double dt)
 {
   DrawEnergyBar(jetpackBar, 5, 5, width / 5, height / 40);
   DrawEnergyBar(healthBar, 5, 5 + height / 40, width / 5, height / 40);
+}
+
+void Renderer::Render3D(double dt, const Point3D &playerPosition)
+{
+  DrawSphereRings(dt, playerPosition);
 }
 
 void Renderer::DrawEnergyBar(EnergyBar *bar, int x, int y, int width, int height)
@@ -45,3 +50,75 @@ void Renderer::DrawEnergyBar(EnergyBar *bar, int x, int y, int width, int height
 	}
 	glEnd();
 }
+
+ void Renderer::AddSphereRing(SphereRing *ring)
+ {
+   if(ringLists.find(ring) != ringLists.end())
+   {
+     return;
+     // TODO ERROR
+   }
+
+   GLuint list = glGenLists(1);
+   ringLists[ring] = list;
+
+   GLUquadricObj *quadratic;
+
+   quadratic=gluNewQuadric();	
+   gluQuadricOrientation(quadratic, GLU_OUTSIDE);
+   gluQuadricNormals(quadratic, GLU_SMOOTH);
+
+   float theta = 360.0/ring->GetNumSpheres();
+
+   glNewList(list, GL_COMPILE);
+
+   for(int i = 0; i < ring->GetNumSpheres(); i++)
+   {
+     glPushMatrix();
+     glRotatef(i*theta, 0, 0, 1);
+     glTranslatef(ring->GetRingRadius(), 0, 0);
+     gluSphere(quadratic, ring->GetSphereRadius(), 16, 16);
+     glPopMatrix();
+   }
+   glEndList();
+ }
+
+ void Renderer::DrawSphereRings(double dt, const Point3D &playerPosition)
+ {
+   //for(std::map<SphereRing*, GLuint>::iterator i = ringLists.begin(); i != ringLists.end(); i++)
+   //{
+   //  float theta = 360.0/i->first->GetNumSpheres();
+   //  GLUquadricObj *quadratic;
+
+   //  quadratic=gluNewQuadric();	
+   //  gluQuadricOrientation(quadratic, GLU_OUTSIDE);
+   //  gluQuadricNormals(quadratic, GLU_SMOOTH);
+
+   //  if((fabs(playerPosition.GetX() - ringX*XLEN) < ringRad) && 
+   //     (fabs(playerPosition.GetY() - ringY)      < ringRad) && 
+   //     (fabs(playerPosition.GetZ() - ringZ*ZLEN) < sphereRad))
+   //  {
+   //    i->first->SetPassed();
+   //  }
+
+   //  glDisable(GL_CULL_FACE);
+
+   //  glPushMatrix();
+
+   //  glTranslatef(ringX*XLEN, ringY, ringZ*ZLEN);
+   //  glRotatef(tempAngle, 0, 0, 1);
+
+   //  if(glIsEnabled(GL_LIGHTING))
+   //    glCallList(lightList[whichList]);
+
+   //  glCallList(i->second);
+   //  glPopMatrix();
+
+   //  tempAngle += angle * dt;
+
+   //  if (tempAngle > 360)
+   //    tempAngle -= 360;
+
+   //  glEnable(GL_CULL_FACE);
+   //}
+ }

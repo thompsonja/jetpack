@@ -1,25 +1,23 @@
 #include "SphereRing.h"
 #include "User.h"
+#include "Point.h"
 #include <math.h>
 
-extern SphereRing *currentRing, *lastRing;
-extern User player;
 extern GLuint lightList[7];
-extern bool passedSound;
 extern int XLEN;
 extern int ZLEN;
 
-SphereRing::SphereRing(int x, int y, int z, float ang, int num, float sphRad, float rRad)
+SphereRing::SphereRing(int x, int y, int z, double rotationRate, int num, double sphRad, double rRad) :
+  numSpheres(num),
+  sphereRadius(sphRad),
+  ringRadius(rRad),
+  rotationRate(rotationRate),
+  tempAngle(0),
+  ringX(x),
+  ringY(y),
+  ringZ(z),
+  whichList(4)
 {
-	numOfSpheres = num;
-	angle = ang;
-	sphereRad = sphRad;
-	ringRad = rRad;
-	ringX = x;
-	ringY = y;
-	ringZ = z;
-	tempAngle = 0;
-	whichList = 4;
 }
 
 void SphereRing::drawList()
@@ -30,41 +28,43 @@ void SphereRing::drawList()
 	gluQuadricOrientation(quadratic, GLU_OUTSIDE);
 	gluQuadricNormals(quadratic, GLU_SMOOTH);
 	
-	float theta = 360.0/numOfSpheres;
+	float theta = 360.0/numSpheres;
 	
 	ringList = glGenLists(1);
 	glNewList(ringList, GL_COMPILE);
 
-	for(int i = 0; i < numOfSpheres; i++)
+	for(int i = 0; i < numSpheres; i++)
 	{
 		glPushMatrix();
 		glRotatef(i*theta, 0, 0, 1);
-		glTranslatef(ringRad, 0, 0);
-		gluSphere(quadratic, sphereRad, 16, 16);
+		glTranslatef(ringRadius, 0, 0);
+		gluSphere(quadratic, sphereRadius, 16, 16);
 		glPopMatrix();
 	}
 	glEndList();
 }
 
-void SphereRing::drawRing(float FPS)
+bool SphereRing::UpdatePassedStatus(const Point3D &playerPosition)
 {
-	float theta = 360.0/numOfSpheres;
+  bool currentlyPassed = ((fabs(playerPosition.GetX() - ringX*XLEN) < ringRadius) && 
+                          (fabs(playerPosition.GetY() - ringY)      < ringRadius) && 
+                          (fabs(playerPosition.GetZ() - ringZ*ZLEN) < sphereRadius));
+  bool newlyPassed = currentlyPassed && !isPassed();
+  if(newlyPassed)
+  {
+    SetPassed(true);
+  }
+  return newlyPassed;
+}
+
+void SphereRing::drawRing(double dt)
+{
+	float theta = 360.0/numSpheres;
 	GLUquadricObj *quadratic;
 
 	quadratic=gluNewQuadric();	
 	gluQuadricOrientation(quadratic, GLU_OUTSIDE);
 	gluQuadricNormals(quadratic, GLU_SMOOTH);
-
-	if((fabs(player.GetX() - ringX*XLEN) < ringRad) && 
-     (fabs(player.GetY() - ringY)      < ringRad) && 
-     (fabs(player.GetZ() - ringZ*ZLEN) < sphereRad))
-	{
-		if(whichList == 4)
-		{
-			whichList = 5;
-			passedSound = true;
-		}
-	}
 
 	glDisable(GL_CULL_FACE);
 
@@ -79,7 +79,7 @@ void SphereRing::drawRing(float FPS)
 	glCallList(ringList);
 	glPopMatrix();
 
-	tempAngle += angle/FPS;
+	tempAngle += rotationRate * dt;
 
 	if (tempAngle > 360)
 		tempAngle -= 360;
@@ -87,12 +87,12 @@ void SphereRing::drawRing(float FPS)
 	glEnable(GL_CULL_FACE);
 }
 
-void SphereRing::setList(int list)
-{
-	whichList = list;
-}
-
 bool SphereRing::isPassed()
 {
 	return whichList != 4;
+}
+
+void SphereRing::SetPassed(bool passed)
+{
+  whichList = passed ? 5 : 4;
 }

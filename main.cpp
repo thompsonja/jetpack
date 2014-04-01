@@ -998,7 +998,7 @@ void draw2d()
   glVertex3f((float)width/2, height/2 - 9, 0.0f);
   glEnd();
 
-  if(renderer) renderer->Render(1 / FPS);
+  if(renderer) renderer->Render2D(1 / FPS);
 
   glPopMatrix();
   glMatrixMode(GL_PROJECTION);
@@ -1063,7 +1063,7 @@ void jump(float FPS, float terrainHeight)
     {
       for(unsigned int i = 0; i < rings.size(); i++)
       {
-        rings[i]->setList(4);
+        rings[i]->SetPassed(false);
       }
       player.healthBar.IncreaseEnergy(1.0);
     }
@@ -1100,7 +1100,7 @@ void jump(float FPS, float terrainHeight)
       }
       for(unsigned int i = 0; i < rings.size(); i++)
       {
-        rings[i]->setList(4);
+        rings[i]->SetPassed(false);
       }
     }
     failureSound = !allRingsPassed && ringsPassed > 0;
@@ -1162,7 +1162,9 @@ void display(SDL_Window *window)
 
   for(unsigned int i = 0; i < rings.size(); i++)
   {
-    rings[i]->drawRing(FPS);
+    bool newlyPassed = rings[i]->UpdatePassedStatus(player.GetPosition());
+    if(newlyPassed) passedSound = true;
+    rings[i]->drawRing(1/FPS);
   }
 
   if(box.Exists())
@@ -1486,6 +1488,7 @@ void Initialize(SDL_Window *window)
 
   for(unsigned int i = 0; i < rings.size(); i++)
   {
+    //renderer->AddSphereRing(rings[i]);
     rings[i]->drawList();
   }
 }
