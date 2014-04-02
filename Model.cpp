@@ -1,7 +1,7 @@
 #include "Model.h"
 #include <stdio.h>
 
-Model::Model(AnimationType type, char *baseFilename) :
+Model::Model(AnimationType type, const char *baseFilename) :
   type(type),
   baseFilename(baseFilename),
   numTotalFrames(1),
@@ -81,7 +81,7 @@ Model::~Model()
   delete modelLines;
 }
 
-bool Model::LoadFrame(int index, char *filename)
+bool Model::LoadFrame(int index, const char *filename)
 {
   FILE *f = fopen(filename, "r");
   if(f == NULL)

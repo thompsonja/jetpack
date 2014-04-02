@@ -11,7 +11,7 @@ public:
     MODEL_STATIC,
     MODEL_ANIMATED
   };
-  Model(AnimationType type, char *baseFilename);
+  Model(AnimationType type, const char *baseFilename);
   ~Model();
   bool IsValid(){return valid;}
   const Point3D& GetPosition(){return currentPosition;}
@@ -28,7 +28,7 @@ private:
   Point2D **textureCoords;
   Point3D **normals;
   AnimationType type;
-  char *baseFilename;
+  const char *baseFilename;
   Point3D currentPosition;
   double minHeight;
   int numTotalFrames;
@@ -36,7 +36,7 @@ private:
   int *modelLines;
   bool valid;
 
-  bool LoadFrame(int index, char *fileName);
+  bool LoadFrame(int index, const char *fileName);
 };
 
 #endif

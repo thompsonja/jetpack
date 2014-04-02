@@ -75,7 +75,7 @@ float FPS = 100;
 bool failureSound = false;
 bool passedSound = false;
 
-//Texture array
+//Textures
 GLuint terrainTexture;
 GLuint waterTexture;
 GLuint skyTexture;
@@ -98,7 +98,6 @@ GLuint boxLightList;
 //Values read in from the environment
 int XLEN = 1;						//xlength of quad mesh
 int ZLEN = 1;						//zlength of quad mesh (I define y as up)
-int maxval;							//maximum gray value
 float minHeight, maxHeight;			//min and max y-values defined by environment file
 float waterHeight, waterOsc;		//water height and how much it oscillates
 int skydomeAngle;					//how much the skydome rotates
@@ -288,7 +287,6 @@ void read_environment(char *filename)
         param1[j] = '\0';
 
         map = new Image(param1);
-        maxval = map->maxval;
 
         //scans for minHeight and maxHeight
         sscanf(temp + sizeof(char)*i, "%f %f", &minHeight, &maxHeight);
@@ -541,7 +539,7 @@ void quit()
 {
   int i, j;
 
-  free(objectList);
+  delete objectList;
   for(i = 0; i < map->height; i++)
   {
     for(j = 0; j < map->width; j++)
@@ -1196,7 +1194,7 @@ void Initialize(SDL_Window *window)
   {
     for (int j = 0; j < map->width; j++)
     {
-      map->grayValues[i][j] = (maxHeight - minHeight)*map->grayValues[i][j]/maxval + minHeight;
+      map->grayValues[i][j] = (maxHeight - minHeight)*map->grayValues[i][j]/map->maxval + minHeight;
     }
   }
 
@@ -1422,7 +1420,7 @@ void Initialize(SDL_Window *window)
   glEndList();
 
   //creates call lists for each frame of each object
-  objectList = (GLuint *)malloc(models.size()*sizeof(GLuint));
+  objectList = new GLuint[models.size()];
   for(unsigned int i = 0; i < models.size(); i++)
   {
     objectList[i] = glGenLists(models[i]->GetNumFrames());
