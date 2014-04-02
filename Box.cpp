@@ -8,19 +8,21 @@ extern User player;
 extern float yVel;
 extern float jumpHeight;
 
-Box::Box(float xlen, float ylen, float zlen, float x, float y, float z)
+Box::Box(float xlen, float ylen, float zlen, const Point3D &position) :
+  xlen(xlen),
+  ylen(ylen),
+  zlen(zlen),
+  position(position),
+  side(0)
 {
-	this->xlen = xlen;
-	this->ylen = ylen;
-	this->zlen = zlen;
-	this->x = x;
-	this->y = y;
-	this->z = z;
-	side = 0;
 }
 
 void Box::draw(float FPS)
 {
+  float x = (float)position.GetX();
+  float y = (float)position.GetY();
+  float z = (float)position.GetZ();
+
 	glBegin(GL_QUADS);
 	glNormal3f(-1, 0, 0);
 	glVertex3f(x + xlen/2, y + ylen/2, z + zlen/2);
@@ -134,9 +136,9 @@ void Box::draw(float FPS)
 				}
 			}
 		}
-
 	}
-	
+
+  position.Set(x, y, z);
 }
 
 void Box::setExistence(bool a)

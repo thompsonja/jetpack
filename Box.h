@@ -1,6 +1,8 @@
 #ifndef BOX_H
 #define BOX_H
 
+#include "Point.h"
+
 class Box
 {
 private:
@@ -8,12 +10,10 @@ private:
 	float xlen;
 	float ylen;
 	float zlen;
-	float x;
-	float y;
-	float z;
+  Point3D position;
 	int side;
 public:
-	Box(float xlen, float ylen, float zlen, float x, float y, float z);
+	Box(float xlen, float ylen, float zlen, const Point3D &position);
 	void setExistence(bool a);
 	bool Exists();
 	void draw(float FPS);

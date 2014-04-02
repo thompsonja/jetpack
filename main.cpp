@@ -172,7 +172,7 @@ std::vector<Model*> models;
 std::vector<SphereRing*> rings;
 std::vector<Billboard*> billboards;
 User player;
-Box box(8, 3, 8, 10, 10, 10);
+Box box(8, 3, 8, Point3D(10, 10, 10));
 Image *map = NULL;
 Renderer *renderer = NULL;
 
@@ -214,24 +214,15 @@ bool loadTextures(char *filename, GLuint *texture)
   return true;										//Returns whether or not it succeeds
 }
 
-void billboardInsert(char *name, char *filename, int coords[MAXBILLBOARDS][2], int count)
+void billboardInsert(char *name, char *filename, int x, int z)
 {
   printf("	Loading billboard . . . . . . ");
-  Billboard *newBillboard = new Billboard();
-  newBillboard->numOfBoards = count;						//how many billboards are listed in the line in the env. file
-
+  Billboard *newBillboard = new Billboard(Point3D(x, map->grayValues[x-1][z-1], z));
+  
   if(loadTextures(filename, &billboardTextures[newBillboard]))		//if it loads the texture correctly
   {
     newBillboard->width = bmpx;
     newBillboard->height = bmpy;
-
-    for(int i = 0; i < count; i++)
-    {
-      newBillboard->xpos[i] = coords[i][0];
-      newBillboard->zpos[i] = coords[i][1];
-    }
-
-    curTexture++;
     billboards.push_back(newBillboard);
   }
   else
@@ -261,8 +252,7 @@ void read_environment(char *filename)
   char param3[4];
   char param4[4];
   char temp[256];
-  int bbcoords[MAXBILLBOARDS][2];
-  int i, j, k, objx, objz, failCount = 0;
+  int i, j, objx, objz, failCount = 0;
   int x, y, z, num;
   float ang, sphRad, rRad;
   //these variables prevent the environment file from having two lines specifying things like
@@ -401,45 +391,35 @@ void read_environment(char *filename)
         param2[j]= temp[i];
       param2[j] = '\0';
 
-      k = 0;
-      //get all the x/z coordinates
-      while(i < (int)strlen(temp))
+      int x, z;
+
+      while(temp[i] == ' ' || temp[i] == '\n')	//skip whitespace
+        i++;
+
+      for(j = 0; temp[i] != ' '; j++, i++)
+        param3[j] = temp[i];
+      param3[j] = '\0';
+
+      while(temp[i] == ' ')
+        i++;
+
+      for(j = 0; temp[i] != ' ' && temp[i] != '\n' && i < (int)strlen(temp); j++, i++)
+        param4[j] = temp[i];
+      param4[j] = '\0';
+
+      //scans z coordinate first then x coordinate for the same reason as objects
+      sscanf(param3, "%d", &z);
+      sscanf(param4, "%d", &x);
+      //if the billboard is outside of the terrain, increase failCount
+      if(x > map->height || z > map->width)
       {
-        if(k == MAXBILLBOARDS)	//I set MAXBILLBOARDS to 20
-        {
-          printf("	Warning: maximum billboard limit surpassed!\n");
-          break;
-        }
-        while(temp[i] == ' ' || temp[i] == '\n')	//skip whitespace
-          i++;
-        if(i < (int)strlen(temp))
-        {
-          for(j = 0; temp[i] != ' '; j++, i++)
-            param3[j] = temp[i];
-          param3[j] = '\0';
-
-          while(temp[i] == ' ')
-            i++;
-
-          for(j = 0; temp[i] != ' ' && temp[i] != '\n' && i < (int)strlen(temp); j++, i++)
-            param4[j] = temp[i];
-          param4[j] = '\0';
-
-          //scans z coordinate first then x coordinate for the same reason as objects
-          sscanf(param3, "%d", &bbcoords[k][1]);
-          sscanf(param4, "%d", &bbcoords[k][0]);
-          //if the billboard is outside of the terrain, increase failCount
-          if(bbcoords[k][0] > map->height || bbcoords[k][1] > map->width)
-            failCount++;
-          else
-            k++;
-        }
+        printf("Billboards outside of terrain!\n");
       }
-      billboardInsert(param1, param2, bbcoords, k);
-      if(failCount)
-        printf("DONE WITH ERRORS\n\t\tOnly %d of %d billboards loaded!\n\t\t%d billboards outside of terrain\n", k, k + failCount, failCount);
       else
+      {
+        billboardInsert(param1, param2, x, z);
         printf("DONE\n");
+      }
     }
     else if (strcmp(keyword, "SKYDOME") == 0)
     {
