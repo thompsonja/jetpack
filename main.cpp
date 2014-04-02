@@ -1164,9 +1164,11 @@ void display(SDL_Window *window)
   {
     bool newlyPassed = rings[i]->UpdatePassedStatus(player.GetPosition());
     if(newlyPassed) passedSound = true;
-    rings[i]->drawRing(1/FPS);
+    //rings[i]->drawRing(1/FPS);
     rings[i]->UpdateRotation(1/FPS);
   }
+
+  renderer->Render3D(1 / FPS, player.GetPosition());
 
   if(box.Exists())
     drawBox();
@@ -1487,10 +1489,13 @@ void Initialize(SDL_Window *window)
   SDL_WarpMouseInWindow(window, width/2, height/2);
   SDL_ShowCursor (SDL_DISABLE);
 
+  renderer->ringLightingNotPassedList = lightList[4];
+  renderer->ringLightingPassedList = lightList[5];
+
   for(unsigned int i = 0; i < rings.size(); i++)
   {
-    //renderer->AddSphereRing(rings[i]);
-    rings[i]->drawList();
+    renderer->AddSphereRing(rings[i]);
+    //rings[i]->drawList();
   }
 }
 

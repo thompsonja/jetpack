@@ -18,6 +18,8 @@ public:
   void AddSphereRing(SphereRing *ring);
   EnergyBar *healthBar;
   EnergyBar *jetpackBar;
+  GLuint ringLightingNotPassedList;
+  GLuint ringLightingPassedList;
 private:
   void DrawEnergyBar(EnergyBar *bar, int x, int y, int width, int height);
   void DrawSphereRings(double dt, const Point3D &playerPosition);

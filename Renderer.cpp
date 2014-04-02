@@ -110,8 +110,8 @@ void Renderer::DrawEnergyBar(EnergyBar *bar, int x, int y, int width, int height
      glTranslatef(ring->GetPosition().GetX()*XLEN, ring->GetPosition().GetY(), ring->GetPosition().GetZ()*ZLEN);
      glRotatef(ring->GetRotation(), 0, 0, 1);
 
-     //if(glIsEnabled(GL_LIGHTING))
-     //  glCallList(lightList[whichList]);
+     if(glIsEnabled(GL_LIGHTING))
+       glCallList(ring->isPassed() ? ringLightingPassedList : ringLightingNotPassedList);
 
      glCallList(i->second);
      glPopMatrix();
