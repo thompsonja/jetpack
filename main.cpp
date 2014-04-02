@@ -66,7 +66,7 @@ to be outside of the terrain.
 #include "Light.h"
 #include "Renderer.h"
 #include <vector>
-
+#include <map>
 
 bool stretchTerrainTexture = false;
 int width=1280, height=960;			//initial window values
@@ -76,18 +76,24 @@ bool failureSound = false;
 bool passedSound = false;
 
 //Texture array
-GLuint texture[10];					//storage for 10 textures
-//0 -> terrain texture
-//1 -> water texture
-//2 -> sky texture
-//3,4 -> sun textures
-//rest -> billboard textures
+GLuint terrainTexture;
+GLuint waterTexture;
+GLuint skyTexture;
+GLuint sunTexture1;
+GLuint sunTexture2;
+std::map<Billboard*, GLuint> billboardTextures;
 
 //Call lists
 GLuint terrainList;	//for terrain call list
 GLuint waterList;   //for water call list
 GLuint *objectList;	//for object call list
-GLuint lightList[7];
+GLuint landLightList;
+GLuint waterLightList;
+GLuint objectLightList;
+GLuint billboardLightList;
+GLuint ringLightingPassedList;
+GLuint ringLightingNotPassedList;
+GLuint boxLightList;
 
 //Values read in from the environment
 int XLEN = 1;						//xlength of quad mesh
@@ -144,8 +150,8 @@ float skyRadius;					//radius of the sky
 //billboard variables
 int curTexture = 5;					//which texture to associate with the billboard
 
-//sun variables
-int whichSun = 0;					//which sun to render (based on random seed)
+//which sun to render (based on random seed)
+GLuint *currentSun = NULL;
 
 //other variables
 float terrainAngle;					//represents the initial angle to look at, for a square
@@ -171,7 +177,7 @@ Image *map = NULL;
 Renderer *renderer = NULL;
 
 //Load bmps and convert to textures
-bool loadTextures(char *filename, int i)		
+bool loadTextures(char *filename, GLuint *texture)		
 {
   FREE_IMAGE_FORMAT format = FreeImage_GetFileType(filename);
   if(format == FIF_UNKNOWN)
@@ -197,8 +203,8 @@ bool loadTextures(char *filename, int i)
   bmpx = FreeImage_GetWidth(tex32);
   bmpy = FreeImage_GetHeight(tex32);
 
-  glGenTextures(1, &texture[i]);
-  glBindTexture(GL_TEXTURE_2D, texture[i]);
+  glGenTextures(1, texture);
+  glBindTexture(GL_TEXTURE_2D, *texture);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, bmpx, bmpy, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (void*)FreeImage_GetBits(tex32));
   glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
@@ -212,10 +218,9 @@ void billboardInsert(char *name, char *filename, int coords[MAXBILLBOARDS][2], i
 {
   printf("	Loading billboard . . . . . . ");
   Billboard *newBillboard = new Billboard();
-  newBillboard->texNumber = curTexture;					//set the billboard texture number to curTexture
   newBillboard->numOfBoards = count;						//how many billboards are listed in the line in the env. file
 
-  if(loadTextures(filename, newBillboard->texNumber))		//if it loads the texture correctly
+  if(loadTextures(filename, &billboardTextures[newBillboard]))		//if it loads the texture correctly
   {
     newBillboard->width = bmpx;
     newBillboard->height = bmpy;
@@ -330,7 +335,7 @@ void read_environment(char *filename)
         param1[j] = '\0';
 
         //Loads the texture and sets the textureExists parameter
-        textureExists = loadTextures(param1, 0);
+        textureExists = loadTextures(param1, &terrainTexture);
         if(textureExists)
           printf("DONE\n");
         else
@@ -451,7 +456,7 @@ void read_environment(char *filename)
         //scan in the rotation angle
         sscanf(temp + sizeof(char)*i, "%d", &skydomeAngle);
         angle = skydomeAngle;	//set angle to skydomeAngle, since angle is what's actually going to be increased
-        skyExists = loadTextures(param1, 2);
+        skyExists = loadTextures(param1, &skyTexture);
         if(skyExists)
           printf("DONE\n");	//load texture
         else
@@ -477,7 +482,7 @@ void read_environment(char *filename)
         //scan for water height and amount of oscillation
         sscanf(temp + sizeof(char)*i, "%f %f", &waterHeight, &waterOsc);
 
-        if(waterExists = loadTextures(param1, 1))
+        if(waterExists = loadTextures(param1, &waterTexture))
           printf("DONE\n");	//load texture
         else
           printf("FAILED\n\t\tCould not open texture: %s\n", param1);
@@ -505,21 +510,21 @@ void read_environment(char *filename)
           param2[j] = temp[i];
         param2[j] = '\0';
 
-        sun1Exists = loadTextures(param1, 3);	//load texture
+        sun1Exists = loadTextures(param1, &sunTexture1); //load texture
         if(sun1Exists)
         {
           printf("DONE\n");
-          whichSun = 3;
+          currentSun = &sunTexture1;
         }
         else
           printf("FAILED\n\t\tCould not open sun: %s", param1);
 
         printf("	Loading sun texture 2 . . . . ");
-        sun2Exists = loadTextures(param2, 4);	//load texture
+        sun2Exists = loadTextures(param2, &sunTexture2); //load texture
         if(sun2Exists)
         {
           printf("DONE\n");
-          whichSun = 4;
+          currentSun = &sunTexture2;
         }
         else
           printf("FAILED\n\t\tCould not open sun: %s", param2);
@@ -720,7 +725,7 @@ void drawBillboards()
   for(unsigned int i = 0; i < billboards.size(); i++)
   {
     Billboard *bb = billboards[i];
-    glBindTexture(GL_TEXTURE_2D, texture[bb->texNumber]);
+    glBindTexture(GL_TEXTURE_2D, billboardTextures[bb]);
     bb->Draw(1 / FPS, XLEN, ZLEN, scaleFactor, map, player.GetPosition());
   }
   glDisable(GL_TEXTURE_2D);
@@ -841,7 +846,7 @@ void drawSkySphere()
   glDisable(GL_CULL_FACE);
   glDisable(GL_LIGHTING);
 
-  glBindTexture(GL_TEXTURE_2D, texture[2]);	//texture array is filled before to include the sky texture
+  glBindTexture(GL_TEXTURE_2D, skyTexture); //texture array is filled before to include the sky texture
 
   quadratic=gluNewQuadric();			// Create A Pointer To The Quadric Object (Return 0 If No Memory) (NEW)
 
@@ -879,15 +884,15 @@ void drawSuns()
   //if both suns exist, only switch suns 1% of the time (otherwise it flickers too much!)
   if(sun1Exists && sun2Exists)
   {
-    if(rand()%100 + 1 > 99)
+    if(rand()%500 + 1 > 499)
     {
-      if(whichSun == 3)
-        whichSun = 4;
+      if(currentSun == &sunTexture1)
+        currentSun = &sunTexture2;
       else
-        whichSun = 3;
+        currentSun = &sunTexture1;
     }
   }
-  glBindTexture(GL_TEXTURE_2D, texture[whichSun]);
+  glBindTexture(GL_TEXTURE_2D, *currentSun);
 
   lookAt[0] = map->height*XLEN - player.GetX();			//x component of lookAt vector
   lookAt[1] = 3*(maxHeight - minHeight) - player.GetY();	//y component of lookAt vector
@@ -930,7 +935,7 @@ void drawSuns()
 void drawBox()
 {
   if(glIsEnabled(GL_LIGHTING))
-    glCallList(lightList[6]);
+    glCallList(boxLightList);
   box.draw(FPS);
 }
 
@@ -1121,9 +1126,9 @@ void display(SDL_Window *window)
 
   //terrain drawing
   if(textureExists)
-    glBindTexture(GL_TEXTURE_2D, texture[0]);
+    glBindTexture(GL_TEXTURE_2D, terrainTexture);
   if(light_enabled)
-    glCallList(lightList[0]);
+    glCallList(landLightList);
   drawTerrain();
 
   glEnable(GL_BLEND);									//enable blending
@@ -1133,18 +1138,18 @@ void display(SDL_Window *window)
   if(waterExists)
   {
     if(glIsEnabled(GL_LIGHTING))
-      glCallList(lightList[1]);
-    glBindTexture(GL_TEXTURE_2D, texture[1]);
+      glCallList(waterLightList);
+    glBindTexture(GL_TEXTURE_2D, waterTexture);
     drawWater();
   }
 
   glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);		//set the blend function for drawing the sun and billboards
   if(light_enabled)
-    glCallList(lightList[3]);
+    glCallList(billboardLightList);
 
   glDisable(GL_FOG);		//I don't want fog when drawing billboards and suns, as it throws off the blending
   drawBillboards();
-  if(whichSun)										//draws sun(s) if any sun texture was successfully loaded
+  if(currentSun != NULL) //draws sun(s) if any sun texture was successfully loaded
     drawSuns();
 
   glDepthMask(GL_TRUE);								//set back to normal depth buffer mode (writable)
@@ -1157,7 +1162,7 @@ void display(SDL_Window *window)
     glEnable(GL_FOG);
 
   if(glIsEnabled(GL_LIGHTING))
-    glCallList(lightList[2]);
+    glCallList(objectLightList);
   drawObjects();		//draw objects
 
   for(unsigned int i = 0; i < rings.size(); i++)
@@ -1450,38 +1455,38 @@ void Initialize(SDL_Window *window)
   }
 
   //setting call lists for changing material properties
-  lightList[0] = glGenLists(1);
-  glNewList(lightList[0], GL_COMPILE);
+  landLightList = glGenLists(1);
+  glNewList(landLightList, GL_COMPILE);
   landlight.SetGlLight();
   glEndList();
 
-  lightList[1] = glGenLists(1);
-  glNewList(lightList[1], GL_COMPILE);
+  waterLightList = glGenLists(1);
+  glNewList(waterLightList, GL_COMPILE);
   waterlight.SetGlLight();
   glEndList();
 
-  lightList[2] = glGenLists(1);
-  glNewList(lightList[2], GL_COMPILE);
+  objectLightList = glGenLists(1);
+  glNewList(objectLightList, GL_COMPILE);
   objectlight.SetGlLight();
   glEndList();
 
-  lightList[3] = glGenLists(1);
-  glNewList(lightList[3], GL_COMPILE);
+  billboardLightList = glGenLists(1);
+  glNewList(billboardLightList, GL_COMPILE);
   billboardlight.SetGlLight();
   glEndList();
 
-  lightList[4] = glGenLists(1);
-  glNewList(lightList[4], GL_COMPILE);
+  ringLightingNotPassedList = glGenLists(1);
+  glNewList(ringLightingNotPassedList, GL_COMPILE);
   ringlighta.SetGlLight();
   glEndList();
 
-  lightList[5] = glGenLists(1);
-  glNewList(lightList[5], GL_COMPILE);
+  ringLightingPassedList = glGenLists(1);
+  glNewList(ringLightingPassedList, GL_COMPILE);
   ringlightb.SetGlLight();
   glEndList();
 
-  lightList[6] = glGenLists(1);
-  glNewList(lightList[6], GL_COMPILE);
+  boxLightList = glGenLists(1);
+  glNewList(boxLightList, GL_COMPILE);
   boxlight.SetGlLight();
   glEndList();
 
@@ -1489,13 +1494,12 @@ void Initialize(SDL_Window *window)
   SDL_WarpMouseInWindow(window, width/2, height/2);
   SDL_ShowCursor (SDL_DISABLE);
 
-  renderer->ringLightingNotPassedList = lightList[4];
-  renderer->ringLightingPassedList = lightList[5];
+  renderer->ringLightingNotPassedList = ringLightingNotPassedList;
+  renderer->ringLightingPassedList = ringLightingPassedList;
 
   for(unsigned int i = 0; i < rings.size(); i++)
   {
     renderer->AddSphereRing(rings[i]);
-    //rings[i]->drawList();
   }
 }
 
