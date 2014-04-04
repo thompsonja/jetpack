@@ -15,11 +15,11 @@ The origin of the terrain corresponds to the bottom left point in the pgm file
 
 x-axis    y-axis
 \     |
-\    |
-\   |
-\  |
-\ |
-\|__________ Z-axis
+ \    |
+  \   |
+   \  |
+    \ |
+     \|__________ Z-axis
 
 ranges:
 x: [0, map->height - 1]
@@ -47,9 +47,13 @@ objects or billboards into their respective linked lists, as I don't insert them
 to be outside of the terrain.
 */
 
+#ifdef _WIN32
 #include <Windows.h>
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
 #include "SDL.h"
-#include "SDL_mixer.h"
 #include "FreeImage.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,6 +70,7 @@ to be outside of the terrain.
 #include "Light.h"
 #include "Renderer.h"
 #include "Environment.h"
+#include "Audio.h"
 #include <vector>
 #include <map>
 
@@ -136,12 +141,10 @@ Environment environment;
 
 void quit()
 {
-  int i, j;
-
   delete objectList;
-  for(i = 0; i < environment.map->height; i++)
+  for(int i = 0; i < environment.map->height; i++)
   {
-    for(j = 0; j < environment.map->width; j++)
+    for(int j = 0; j < environment.map->width; j++)
       free(averageNormals[i][j]);
     free(averageNormals[i]);
   }
@@ -334,11 +337,9 @@ void drawTerrainList()
 
 void drawWater()
 {
-  float sign;
-
   //sign tells you whether or not you are above or under the water,
   //I use it to show the water level when below the water
-  sign = (player.GetY() - environment.waterHeight)/fabs((player.GetY() - environment.waterHeight));
+  float sign = (player.GetY() - environment.waterHeight)/fabs((player.GetY() - environment.waterHeight));
 
   glColor4f(1.0f, 1.0f, 1.0f, 0.4f);	//basically sets alpha level to .4
   glNormal3f(0.0, sign, 0.0);		//normal depends on whether you are above or below water
@@ -499,80 +500,6 @@ void drawBox()
   if(glIsEnabled(GL_LIGHTING))
     glCallList(boxLightList);
   box.draw(FPS);
-}
-
-//sets fog parameters, is called in Initialize()
-void drawFog()
-{
-  GLuint	fogMode  [ ] = { GL_EXP, GL_EXP2, GL_LINEAR };	// Storage For Three Types Of Fog
-  GLfloat	fogColor [4] = {0.8519f, 0.8588f, 0.8882f, 1}; 
-
-  glFogi(GL_FOG_MODE, fogMode[2]);		// Fog Mode
-  glFogfv(GL_FOG_COLOR, fogColor);		// Set Fog Color
-  glFogf(GL_FOG_DENSITY, 0.01f);			// How Dense Will The Fog Be
-  glHint(GL_FOG_HINT, GL_NICEST);			// Fog Hint Value
-  glFogf(GL_FOG_START, 0);				// Fog Start
-  glFogf(GL_FOG_END  , environment.skyRadius);		// Fog End
-}
-
-void drawLight()
-{
-  //Position is set in camera function
-
-  //light settings
-  GLfloat LightAmbient[] = {0.5f, 0.5f, 0.5f, 0.5f}; 
-  GLfloat LightDiffuse[] = {1.0f, 1.0f, 1.0f, 1.0f};
-  GLfloat globalAmbient[] = {0.6f, 0.6f, 0.6f, 1.0f};
-
-  glLightfv(GL_LIGHT0, GL_AMBIENT, LightAmbient);	
-  glLightfv(GL_LIGHT0, GL_DIFFUSE, LightDiffuse);	
-
-  glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);	
-  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
-
-  glEnable(GL_LIGHT0);
-
-  //disabling this seemed to make the light look better to me, personally
-  //	glColorMaterial(GL_FRONT_AND_BACK,GL_DIFFUSE);
-  //	glEnable(GL_COLOR_MATERIAL);
-
-  //I moved this to the camera function to have the light position stay the same
-  //regardless of camera position, etc.
-  //	glLightfv(GL_LIGHT0, GL_POSITION,LightPosition);
-}
-
-void draw2d()
-{
-  GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
-
-  //sets up the projection for drawing text on the screen
-  glMatrixMode(GL_PROJECTION);
-  glPushMatrix();
-  glLoadIdentity();  
-  glOrtho(0, width, height, 0, 0, 1);
-  glMatrixMode(GL_MODELVIEW);
-  glPushMatrix();
-  glLoadIdentity();
-
-  glDisable(GL_LIGHTING);							//disable light for drawing text
-  glLineWidth(1.0);
-  //reset the matrices
-  glBegin(GL_LINES);
-  glVertex3f(width/2 + 9, (float)height/2, 0.0f);
-  glVertex3f(width/2 - 8, (float)height/2, 0.0f);
-  glVertex3f((float)width/2, height/2 + 8, 0.0f);
-  glVertex3f((float)width/2, height/2 - 9, 0.0f);
-  glEnd();
-
-  if(renderer) renderer->Render2D(1 / FPS);
-
-  glPopMatrix();
-  glMatrixMode(GL_PROJECTION);
-  glPopMatrix();
-  glMatrixMode(GL_MODELVIEW);
-  if(light_enabled)
-    glEnable(GL_LIGHTING);
 }
 
 //updates the camera position
@@ -736,7 +663,7 @@ void display(SDL_Window *window)
     environment.rings[i]->UpdateRotation(1/FPS);
   }
 
-  renderer->Render3D(1 / FPS, player.GetPosition());
+  if(renderer) renderer->Render3D(1 / FPS, player.GetPosition());
 
   if(box.Exists())
     drawBox();
@@ -745,7 +672,7 @@ void display(SDL_Window *window)
 
   player.UpdatePos(dx*mouseXsens, dy*mouseYsens);
 
-  draw2d();
+  if(renderer) renderer->Render2D(1 / FPS);
 
   glFlush();
   SDL_GL_SwapWindow(window);
@@ -991,8 +918,8 @@ void Initialize(SDL_Window *window)
   //determines what angle to look at initially
   terrainAngle = atan((float)(map->height - 1)*XLEN/((map->width - 1)*ZLEN)); 
 
-  drawFog();			//initialize fog
-  drawLight();		//initialize water
+  renderer->InitFog(environment.skyRadius);
+  renderer->InitLight();
 
   //creates a call list for the terrain
   terrainList = glGenLists(1);
@@ -1070,6 +997,8 @@ void Initialize(SDL_Window *window)
 
 int main(int argc, char **argv)
 {
+  chdir("Resources");
+
   Uint32 dt = 0, dtPrev = 0, index = 0, heightIndex = 0;
   int avgFrame[20] = {10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10};
   float elev[50];
@@ -1082,34 +1011,14 @@ int main(int argc, char **argv)
   height = windowRect.bottom - windowRect.top;
   printf("%d %d\n", width, height);
 
-  int audio_rate = 22050;			//Frequency of audio playback
-  Uint16 audio_format = MIX_DEFAULT_FORMAT; 	//Format of the audio we're playing
-  int audio_channels = 2;			//2 channels = stereo
-  int audio_buffers = 4096;		//Size of the audio buffers in memory
-
-  if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+  if (SDL_Init(SDL_INIT_VIDEO) != 0) 
+  {
     printf("Unable to initialize SDL: %s\n", SDL_GetError());
     return 1;
   }
 
-  //Initialize SDL_mixer with our chosen audio settings
-  if(Mix_OpenAudio(audio_rate, audio_format, audio_channels, audio_buffers) != 0) 
-  {
-    printf("Unable to initialize audio: %s\n", Mix_GetError());
-    exit(1);
-  }
-
-  //Load our WAV file from disk
-  Mix_Chunk *sound = Mix_LoadWAV("sound.wav");
-  Mix_Music *music = Mix_LoadMUS("Rocketbelt.mp3");
-  Mix_Chunk *jetpack = Mix_LoadWAV("Blowtorch.wav");
-  Mix_Chunk *ding = Mix_LoadWAV("Ting.wav");
-
-  if(sound == NULL)
-    printf("Unable to load WAV file: %s\n", Mix_GetError());
-
-  if(music == NULL)
-    printf("Unable to load OGG file: %s\n", Mix_GetError());
+  Audio audioEngine;
+  audioEngine.Initialize();
 
   //read_environment(environmentFile); //read the environment file
 
@@ -1151,7 +1060,7 @@ int main(int argc, char **argv)
   for(int i = 0; i < 50; i++)
     elev[i] = map->grayValues[0][0];
 
-  Mix_PlayMusic(music, -1);
+  audioEngine.PlayMusic(Audio::MUSIC_BACKGROUND, -1);
 
   //Keep looping until the user closes the SDL window
   bool running = true;
@@ -1268,7 +1177,7 @@ int main(int argc, char **argv)
 
     if(player.jetPack.IsEmpty())
     {
-      Mix_HaltChannel(1);
+      audioEngine.StopSound(1);
     }
 
     if(SDL_GetMouseState(NULL, NULL) & SDL_BUTTON(SDL_BUTTON_LEFT))
@@ -1283,7 +1192,7 @@ int main(int argc, char **argv)
           jumpHeight = player.GetY();
           yVel = 10;
         }
-        Mix_PlayChannel(1, jetpack, -1);
+        audioEngine.PlaySoundEffect(Audio::SFX_JETPACK, -1, 1);
       }
     }
     else
@@ -1316,13 +1225,13 @@ int main(int argc, char **argv)
 
     if(failureSound)
     {
-      Mix_PlayChannel(0, sound, 0);
+      audioEngine.PlaySoundEffect(Audio::SFX_FAIL, 0, 0);
       failureSound = false;
     }
 
     if(passedSound)
     {
-      Mix_PlayChannel(2, ding, 0);
+      audioEngine.PlaySoundEffect(Audio::SFX_RING_PASSED, 0, 2);
       passedSound = false;
     }
   }

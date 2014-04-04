@@ -7,14 +7,6 @@
 #include "Model.h"
 #include "FreeImage.h"
 
-//Textures
-extern GLuint terrainTexture;
-extern GLuint waterTexture;
-extern GLuint skyTexture;
-extern GLuint sunTexture1;
-extern GLuint sunTexture2;
-extern std::map<Billboard*, GLuint> billboardTextures;
-
 Environment::Environment() :
   textureExists(false),
   waterExists(false),

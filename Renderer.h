@@ -13,6 +13,8 @@ class Renderer
 {
 public:
   Renderer(int width, int height, int XLEN, int ZLEN);
+  void InitFog(float fogEnd);
+  void InitLight();
   void Render2D(double dt);
   void Render3D(double dt, const Point3D &playerPosition);
   void AddSphereRing(SphereRing *ring);

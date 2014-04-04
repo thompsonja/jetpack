@@ -1,0 +1,26 @@
+HEIGHT  Heightmaps/map1.pgm 0 50
+LENGTHS  3 3
+TEXTURE Textures/green.bmp
+OBJ Static Models/anim.mod 100 100
+OBJ Static Models/anim.mod 10 11
+OBJ Static Models/anim.mod 10 12
+OBJ Animated Models/anim.mod 10 7
+OBJ Animated Models/anim.mod 10 8
+OBJ Animated Models/anim.mod 15 9
+OBJ Animated Models/anim.mod 15 10
+BILLBOARD   CamAgaci Textures/Tree.bmp 30 30
+BILLBOARD   CamAgaci Textures/Tree.bmp 20 20
+BILLBOARD   CamAgaci Textures/Tree.bmp 3 3
+BILLBOARD   CamAgaci Textures/Tree.bmp 5 5
+BILLBOARD   CamAgaci Textures/Tree.bmp 100 100
+SKYDOME Textures/Sky0.bmp 3
+WATER Textures/PrairieWind.bmp 3 0.1
+SUN  Textures/nebula.bmp  Textures/star.bmp
+//RING X Y Z rotationspeed numberofspheres sphereradius ringradius
+RING 10 50 20 30 12 1 10
+RING 100 20 100 30 12 1 10
+RING 60 100 90 30 12 1 10
+RING 45 150 10 30 12 1 10
+RING 50 200 50 30 12 1 10
+RING 10 20 10 30 15 0.5 5
+RING 90 80 80 60 8 0.25 3

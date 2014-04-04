@@ -83,8 +83,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Audio.cpp" />
     <ClCompile Include="Billboard.cpp" />
     <ClCompile Include="Box.cpp" />
+    <ClCompile Include="Common\Observer.cpp" />
     <ClCompile Include="EnergyBar.cpp" />
     <ClCompile Include="Environment.cpp" />
     <ClCompile Include="Image.cpp" />
@@ -96,8 +98,10 @@
     <ClCompile Include="User.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Audio.h" />
     <ClInclude Include="Billboard.h" />
     <ClInclude Include="Box.h" />
+    <ClInclude Include="Common\Observer.h" />
     <ClInclude Include="EnergyBar.h" />
     <ClInclude Include="Environment.h" />
     <ClInclude Include="Image.h" />

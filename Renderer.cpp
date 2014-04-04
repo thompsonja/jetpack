@@ -11,10 +11,78 @@ Renderer::Renderer(int width, int height, int XLEN, int ZLEN) :
 {
 }
 
+void Renderer::InitFog(float fogEnd)
+{
+  GLuint	fogMode  [ ] = { GL_EXP, GL_EXP2, GL_LINEAR };	// Storage For Three Types Of Fog
+  GLfloat	fogColor [4] = {0.8519f, 0.8588f, 0.8882f, 1}; 
+
+  glFogi(GL_FOG_MODE, fogMode[2]);
+  glFogfv(GL_FOG_COLOR, fogColor);
+  glFogf(GL_FOG_DENSITY, 0.01f);
+  glHint(GL_FOG_HINT, GL_NICEST);
+  glFogf(GL_FOG_START, 0);
+  glFogf(GL_FOG_END  , fogEnd);
+}
+
+void Renderer::InitLight()
+{
+  //Position is set in camera function
+
+  //light settings
+  GLfloat LightAmbient[] = {0.5f, 0.5f, 0.5f, 0.5f}; 
+  GLfloat LightDiffuse[] = {1.0f, 1.0f, 1.0f, 1.0f};
+  GLfloat globalAmbient[] = {0.6f, 0.6f, 0.6f, 1.0f};
+
+  glLightfv(GL_LIGHT0, GL_AMBIENT, LightAmbient);	
+  glLightfv(GL_LIGHT0, GL_DIFFUSE, LightDiffuse);	
+
+  glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);	
+  glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+  glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
+
+  glEnable(GL_LIGHT0);
+
+  //disabling this seemed to make the light look better to me, personally
+  //	glColorMaterial(GL_FRONT_AND_BACK,GL_DIFFUSE);
+  //	glEnable(GL_COLOR_MATERIAL);
+
+  //I moved this to the camera function to have the light position stay the same
+  //regardless of camera position, etc.
+  //	glLightfv(GL_LIGHT0, GL_POSITION,LightPosition);
+}
+
 void Renderer::Render2D(double dt)
 {
+  GLboolean light_enabled = glIsEnabled(GL_LIGHTING);
+
+  //sets up the projection for drawing text on the screen
+  glMatrixMode(GL_PROJECTION);
+  glPushMatrix();
+  glLoadIdentity();  
+  glOrtho(0, width, height, 0, 0, 1);
+  glMatrixMode(GL_MODELVIEW);
+  glPushMatrix();
+  glLoadIdentity();
+
+  glDisable(GL_LIGHTING);							//disable light for drawing text
+  glLineWidth(1.0);
+  //reset the matrices
+  glBegin(GL_LINES);
+  glVertex3f(width/2 + 9, (float)height/2, 0.0f);
+  glVertex3f(width/2 - 8, (float)height/2, 0.0f);
+  glVertex3f((float)width/2, height/2 + 8, 0.0f);
+  glVertex3f((float)width/2, height/2 - 9, 0.0f);
+  glEnd();
+
   DrawEnergyBar(jetpackBar, 5, 5, width / 5, height / 40);
   DrawEnergyBar(healthBar, 5, 5 + height / 40, width / 5, height / 40);
+
+  glPopMatrix();
+  glMatrixMode(GL_PROJECTION);
+  glPopMatrix();
+  glMatrixMode(GL_MODELVIEW);
+  if(light_enabled)
+    glEnable(GL_LIGHTING);
 }
 
 void Renderer::Render3D(double dt, const Point3D &playerPosition)
