@@ -3,9 +3,6 @@
 
 #include <math.h>
 
-extern int XLEN;
-extern int ZLEN;
-
 SphereRing::SphereRing(const Point3D &position, double rotationRate, int num, double sphRad, double rRad) :
   numSpheres(num),
   sphereRadius(sphRad),
@@ -17,7 +14,7 @@ SphereRing::SphereRing(const Point3D &position, double rotationRate, int num, do
 {
 }
 
-bool SphereRing::UpdatePassedStatus(const Point3D &playerPosition)
+bool SphereRing::UpdatePassedStatus(const Point3D &playerPosition, int XLEN, int ZLEN)
 {
   bool currentlyPassed = ((fabs(playerPosition.GetX() - ringPosition.GetX()*XLEN) < ringRadius) && 
                           (fabs(playerPosition.GetY() - ringPosition.GetY())      < ringRadius) && 

@@ -3,12 +3,11 @@
 #include "SphereRing.h"
 #include "Point.h"
 
-extern int XLEN;
-extern int ZLEN;
-
-Renderer::Renderer(int width, int height) :
+Renderer::Renderer(int width, int height, int XLEN, int ZLEN) :
   width(width),
-  height(height)
+  height(height),
+  XLEN(XLEN),
+  ZLEN(ZLEN)
 {
 }
 

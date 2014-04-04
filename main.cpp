@@ -15,11 +15,11 @@ The origin of the terrain corresponds to the bottom left point in the pgm file
 
 x-axis    y-axis
 \     |
- \    |
-  \   |
-   \  |
-    \ |
-     \|__________ Z-axis
+\    |
+\   |
+\  |
+\ |
+\|__________ Z-axis
 
 ranges:
 x: [0, map->height - 1]
@@ -65,6 +65,7 @@ to be outside of the terrain.
 #include "Image.h"
 #include "Light.h"
 #include "Renderer.h"
+#include "Environment.h"
 #include <vector>
 #include <map>
 
@@ -75,18 +76,10 @@ float FPS = 100;
 bool failureSound = false;
 bool passedSound = false;
 
-//Textures
-GLuint terrainTexture;
-GLuint waterTexture;
-GLuint skyTexture;
-GLuint sunTexture1;
-GLuint sunTexture2;
-std::map<Billboard*, GLuint> billboardTextures;
-
 //Call lists
-GLuint terrainList;	//for terrain call list
-GLuint waterList;   //for water call list
-GLuint *objectList;	//for object call list
+GLuint terrainList;
+GLuint waterList;
+GLuint *objectList;
 GLuint landLightList;
 GLuint waterLightList;
 GLuint objectLightList;
@@ -95,474 +88,64 @@ GLuint ringLightingPassedList;
 GLuint ringLightingNotPassedList;
 GLuint boxLightList;
 
-//Values read in from the environment
-int XLEN = 1;						//xlength of quad mesh
-int ZLEN = 1;						//zlength of quad mesh (I define y as up)
-float minHeight, maxHeight;			//min and max y-values defined by environment file
-float waterHeight, waterOsc;		//water height and how much it oscillates
-int skydomeAngle;					//how much the skydome rotates
-
-//variables storing which things exist
-int textureExists = 0;				//whether a texture will cover the terrain
-int waterExists = 0;				//whether or not there is water
-int skyExists = 0;
-int sun1Exists = 0;
-int sun2Exists = 0;
-
 //mouse variables
-float mouseXsens = -.1f;				//mouse sensitivities: increase to increase
-float mouseYsens = -.1f;				//sensitivity, negative values invert look
-float mouseX = 0;					//stores x value when mouse is clicked
-float mouseY = 0;					//stores y value when mouse is clicked
-float oldMouseX = 0;				//stores change in x when mouse is unclicked
-float oldMouseY = 0;				//stores change in y when mouse is unclicked
+float mouseXsens = -.1f; //mouse sensitivities: increase to increase
+float mouseYsens = -.1f; //sensitivity, negative values invert look
+float mouseX = 0;        //stores x value when mouse is clicked
+float mouseY = 0;        //stores y value when mouse is clicked
+float oldMouseX = 0;     //stores change in x when mouse is unclicked
+float oldMouseY = 0;     //stores change in y when mouse is unclicked
 int oldY;
 float dx = width/2;					//change in mouse x coordinate, used as an amount
 //to rotate around y axis (up) to pan the screen
 float dy = height/2;				//change in mouse y coordinate, used as an amount
 //to rotate around x axis to look higher up or down
-int whatButton = 0;					//what mouse button is clicked 
-//(0 = none, 1 = left, 2 = right, 3 = both)
 
 //variables affecting how fast things are animated (alter these according to system speed)
-int animationSpeed = 5;				//affects animation speed for objects, etc. (lower = faster)
-
-int skySpeed = 50;	//affects sky speed.
-
-int waterSpeed = 100;				//how fast water oscillates
+int animationSpeed = 5; //affects animation speed for objects, etc. (lower = faster)
+int skySpeed = 50;
+int waterSpeed = 100; //how fast water oscillates
 
 float jumpFactor = 0;
-float jumpHeight;					//height in which the user jumps
+float jumpHeight; //height in which the user jumps
 float g = -90;
 float yVel = 0;
-int crouchFactor = 0;
 
 //water variables
 float waterHeightMax;
 float waterHeightMin;				//min and max water heights, aka +/- waterOsc
 int waterSign = 1;
 
-//skydome variables
-int angle;							//updates rotation angle based on skydomeAngle
-float skyRadius;					//radius of the sky
-
-//billboard variables
-int curTexture = 5;					//which texture to associate with the billboard
-
-//which sun to render (based on random seed)
-GLuint *currentSun = NULL;
-
 //other variables
-float terrainAngle;					//represents the initial angle to look at, for a square
-//map this should be pi/4 radians
-float scaleFactor = 1;				//how much to scale objects/billboards
+float terrainAngle;	//represents the initial angle to look at, for a square map this should be pi/4 radians
 
 float*** normals;					//like terrain, but holds normal vector for each quad
 float*** averageNormals;			//holds average normal vector for each vertex
 
 float viewer[3] = {0, 50, 0};		//position of camera
-int bmpx, bmpy;						//stores image width and height when textures are loaded
 
 char *environmentFile = "environment.txt"; //the environment file to be read in
 
 Light landlight, waterlight, objectlight, billboardlight, ringlighta, ringlightb, boxlight;
 
-std::vector<Model*> models;
-std::vector<SphereRing*> rings;
-std::vector<Billboard*> billboards;
 User player;
 Box box(8, 3, 8, Point3D(10, 10, 10));
-Image *map = NULL;
+
 Renderer *renderer = NULL;
-
-//Load bmps and convert to textures
-bool loadTextures(char *filename, GLuint *texture)		
-{
-  FREE_IMAGE_FORMAT format = FreeImage_GetFileType(filename);
-  if(format == FIF_UNKNOWN)
-  {
-    printf("Unknown image format for file %s\n", filename);
-    return false;
-  }
-
-  FIBITMAP *tex = FreeImage_Load(format, filename);
-  if(tex == NULL)
-  {
-    printf("FreeImage failed to load file %s\n", filename);
-    return false;
-  }
-
-  FIBITMAP *tex32 = FreeImage_ConvertTo32Bits(tex);
-  if(tex32 == NULL)
-  {
-    printf("FreeImage failed to convert file %s to 32 bit format\n", filename);
-    return false;
-  }
-
-  bmpx = FreeImage_GetWidth(tex32);
-  bmpy = FreeImage_GetHeight(tex32);
-
-  glGenTextures(1, texture);
-  glBindTexture(GL_TEXTURE_2D, *texture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, bmpx, bmpy, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, (void*)FreeImage_GetBits(tex32));
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-  FreeImage_Unload(tex32);
-  FreeImage_Unload(tex);
-  
-  return true;										//Returns whether or not it succeeds
-}
-
-void billboardInsert(char *name, char *filename, int x, int z)
-{
-  printf("	Loading billboard . . . . . . ");
-  Billboard *newBillboard = new Billboard(Point3D(x, map->grayValues[x-1][z-1], z));
-  
-  if(loadTextures(filename, &billboardTextures[newBillboard]))		//if it loads the texture correctly
-  {
-    newBillboard->width = bmpx;
-    newBillboard->height = bmpy;
-    billboards.push_back(newBillboard);
-  }
-  else
-  {
-    printf("FAILED\n\t\tCould not open billboard: %s\n", filename);
-  }
-}
-
-//inserts the object into a double linked list
-void objInsert(Model::AnimationType type, char *name, int x, int z)
-{
-  models.push_back(new Model(type, name));
-
-  //if the object was successfully loaded, insert it into the linked list
-  if(models.back()->IsValid())
-  {
-    models.back()->SetStartPosition(Point2D(x, z));
-  }
-}
-
-//reads the environment file from Initialize()
-void read_environment(char *filename)
-{
-  char keyword[10];
-  char param1[20];
-  char param2[20];
-  char param3[4];
-  char param4[4];
-  char temp[256];
-  int i, j, objx, objz, failCount = 0;
-  int x, y, z, num;
-  float ang, sphRad, rRad;
-  //these variables prevent the environment file from having two lines specifying things like
-  //texture, heightmap, water, etc.
-  int readHeight = 0, readTexture = 0, readLengths = 0, readWater = 0, readSky = 0, readSun = 0;
-  FILE *f;
-
-  printf("Loading environment file: %s\n", filename);
-  f = fopen(filename, "r");
-
-  //grabs a new line from the env. file
-  while(fgets(temp, 128*sizeof(char), f) != NULL)
-  {
-    //skips any blank lines
-    if(temp[0] == '\n')
-      temp[0] = ' ';
-    for (i = 0; temp[i] != ' '; i++)
-      keyword[i] = temp[i];
-    keyword[i] = '\0';
-
-    //compares the keyword to the possible keywords of
-    //HEIGHT, LENGTHS, TEXTURE, OBJ, BILLBOARD, SKYDOME, WATER, SUN
-    if(strcmp(keyword, "HEIGHT") == 0)
-    {
-      printf("	Loading height map  . . . . . ");
-      if(readHeight == 0)
-      {
-        while(temp[i] == ' ')	//skip whitespace
-          i++;
-
-        for (j = 0; temp[i] != ' '; j++, i++)	//read in the name of the heightmap
-          param1[j] = temp[i];
-        param1[j] = '\0';
-
-        map = new Image(param1);
-
-        //scans for minHeight and maxHeight
-        sscanf(temp + sizeof(char)*i, "%f %f", &minHeight, &maxHeight);
-        readHeight = 1;
-        printf("DONE\n");
-      }
-      else
-        printf("FAILED\n\t\tAlready read height map!\n");
-    }
-    else if(strcmp(keyword, "LENGTHS") == 0)
-    {
-      printf("	Loading lengths . . . . . . . ");
-      if(readLengths == 0)
-      {
-        //scans the XLEN and ZLEN values from the string
-        sscanf(temp + sizeof(char)*i, "%d %d", &XLEN, &ZLEN);
-        readLengths = 1;
-        printf("DONE\n");
-      }
-      else
-        printf("FAILED\n\t\tAlready read lengths!\n");
-    }
-    else if (strcmp(keyword, "TEXTURE") == 0)
-    {
-      printf("	Loading land texture  . . . . ");
-      if(readTexture == 0)
-      {
-        while(temp[i] == ' ')	//skips white space
-          i++;
-        //reads in the name of the texture.  For future reference, the strlen(temp)
-        //part is in case the texture is the last line, and there is no newline character
-        for (j = 0; temp[i] != '\n' && temp[i] != ' ' && i < (int)strlen(temp); j++, i++)
-          param1[j] = temp[i];
-        param1[j] = '\0';
-
-        //Loads the texture and sets the textureExists parameter
-        textureExists = loadTextures(param1, &terrainTexture);
-        if(textureExists)
-          printf("DONE\n");
-        else
-          printf("FAILED\n\t\tCould not open texture: %s\n", param1);
-
-        readTexture = 1;
-      }
-      else
-        printf("FAILED\n\t\tAlready read land texture!\n");
-    }
-    else if (strcmp(keyword, "OBJ") == 0)
-    {
-      //gets the first parameter, whether it is animated or not
-      while(temp[i] == ' ')
-        i++;
-      for(j = 0; temp[i] != ' '; j++, i++)
-        param1[j] = temp[i];
-      param1[j] = '\0';
-
-      //gets the second parameter, the object's name
-      while(temp[i] == ' ')
-        i++;
-      for(j = 0; temp[i] != ' '; j++, i++)
-        param2[j] = temp[i];
-      param2[j] = '\0';
-
-      //scans the string for the object's x and z values
-      //note that the first parameter is objz since in the pdf
-      //it is described as "column, row", and when reading in
-      //from the .pgm file, I define rows as marked by x and
-      //columns as marked by y
-      sscanf(temp + sizeof(char)*i, "%d %d", &objz, &objx);
-
-      //inserts the object into the linked list
-      if(strcmp(param1, "Static") == 0)
-      {
-        printf("	Loading static object . . . . ");
-        if(objx > map->height || objz > map->width)
-          printf("FAILED\n\t\tObject outside of terrain\n");
-        else
-          objInsert(Model::MODEL_STATIC, param2, objx, objz);
-      }
-      else if(strcmp(param1, "Animated") == 0)
-      {
-        printf("	Loading animated object . . . ");
-        if(objx > map->height || objz > map->width)
-          printf("FAILED\n\t\tObject outside of terrain\n");
-        else
-          objInsert(Model::MODEL_ANIMATED, param2, objx, objz);
-      }
-    }
-    else if (strcmp(keyword, "BILLBOARD") == 0)
-    {
-      while(temp[i] == ' ')	//skip whitespace
-        i++;
-      for(j = 0; temp[i] != ' '; j++, i++)	//get name of billboard
-        param1[j] = temp[i];
-      param1[j] = '\0';
-
-      while(temp[i] == ' ')	//skip whitespace
-        i++;
-      for(j = 0; temp[i] != ' '; j++, i++)	//get filename of billboard
-        param2[j]= temp[i];
-      param2[j] = '\0';
-
-      int x, z;
-
-      while(temp[i] == ' ' || temp[i] == '\n')	//skip whitespace
-        i++;
-
-      for(j = 0; temp[i] != ' '; j++, i++)
-        param3[j] = temp[i];
-      param3[j] = '\0';
-
-      while(temp[i] == ' ')
-        i++;
-
-      for(j = 0; temp[i] != ' ' && temp[i] != '\n' && i < (int)strlen(temp); j++, i++)
-        param4[j] = temp[i];
-      param4[j] = '\0';
-
-      //scans z coordinate first then x coordinate for the same reason as objects
-      sscanf(param3, "%d", &z);
-      sscanf(param4, "%d", &x);
-      //if the billboard is outside of the terrain, increase failCount
-      if(x > map->height || z > map->width)
-      {
-        printf("Billboards outside of terrain!\n");
-      }
-      else
-      {
-        billboardInsert(param1, param2, x, z);
-        printf("DONE\n");
-      }
-    }
-    else if (strcmp(keyword, "SKYDOME") == 0)
-    {
-      printf("	Loading skydome texture . . . ");
-      if(readSky == 0)
-      {	
-        while(temp[i] == ' ')	//skip whitespace
-          i++;
-        //get the bmp name for the skydome
-        for(j = 0; temp[i] != ' '; j++, i++)
-          param1[j] = temp[i];
-        param1[j] = '\0';
-
-        //scan in the rotation angle
-        sscanf(temp + sizeof(char)*i, "%d", &skydomeAngle);
-        angle = skydomeAngle;	//set angle to skydomeAngle, since angle is what's actually going to be increased
-        skyExists = loadTextures(param1, &skyTexture);
-        if(skyExists)
-          printf("DONE\n");	//load texture
-        else
-          printf("FAILED\n\t\tCould not open texture: %s\n", param1);
-
-        readSky = 1;
-      }
-      else
-        printf("FAILED\n\t\tAlready read skydome texture!\n");
-    }
-    else if (strcmp(keyword, "WATER") == 0)
-    {
-      printf("	Loading water texture . . . . ");
-      if(readWater == 0)
-      {
-        while(temp[i] == ' ')	//skip whitespace
-          i++;
-        //get the bmp name for the water
-        for(j = 0; temp[i] != ' '; j++, i++)
-          param1[j] = temp[i];
-        param1[j] = '\0';
-
-        //scan for water height and amount of oscillation
-        sscanf(temp + sizeof(char)*i, "%f %f", &waterHeight, &waterOsc);
-
-        if(waterExists = loadTextures(param1, &waterTexture))
-          printf("DONE\n");	//load texture
-        else
-          printf("FAILED\n\t\tCould not open texture: %s\n", param1);
-        readWater = 1;
-      }
-      else
-        printf("FAILED\n\t\tAlready read water values!\n");
-    }
-    else if (strcmp(keyword, "SUN") == 0)
-    {
-      if(readSun == 0)
-      {
-        printf("	Loading sun texture 1 . . . . ");
-        while(temp[i] == ' ')	//skip whitespace
-          i++;
-        //get bmp name for first sun
-        for(j = 0; temp[i] != ' '; j++, i++)
-          param1[j] = temp[i];
-        param1[j] = '\0';
-
-        while(temp[i] == ' ')	//skip whitespace
-          i++;
-        //get bmp name for second sun
-        for(j = 0; temp[i] != ' ' && temp[i] != '\n' && i < (int)strlen(temp); j++, i++)
-          param2[j] = temp[i];
-        param2[j] = '\0';
-
-        sun1Exists = loadTextures(param1, &sunTexture1); //load texture
-        if(sun1Exists)
-        {
-          printf("DONE\n");
-          currentSun = &sunTexture1;
-        }
-        else
-          printf("FAILED\n\t\tCould not open sun: %s", param1);
-
-        printf("	Loading sun texture 2 . . . . ");
-        sun2Exists = loadTextures(param2, &sunTexture2); //load texture
-        if(sun2Exists)
-        {
-          printf("DONE\n");
-          currentSun = &sunTexture2;
-        }
-        else
-          printf("FAILED\n\t\tCould not open sun: %s", param2);
-
-        readSun = 1;
-      }
-      else
-        printf("	Loading sun texture 1 . . . . FAILED\n\t\tAlready read sun textures!\n");
-    }
-    else if (strcmp(keyword, "RING") == 0)
-    {
-      printf("	Loading ring  . . . . . . . . ");
-
-      while(temp[i] == ' ') //skip whitespace
-        i++;
-
-      sscanf(temp + sizeof(char)*i, "%d %d %d %f %d %f %f", &x, &y, &z, &ang, &num, &sphRad, &rRad);
-      rings.push_back(new SphereRing(Point3D(x, y, z), ang, num, sphRad, rRad));
-
-      printf("DONE\n");
-    }
-  }
-
-  renderer = new Renderer(width, height);
-  renderer->healthBar = &player.healthBar;
-  renderer->jetpackBar = &player.jetPack;
-
-  printf("Loading complete, executing program\n");
-
-  fclose(f);
-}
+Environment environment;
 
 void quit()
 {
   int i, j;
 
   delete objectList;
-  for(i = 0; i < map->height; i++)
+  for(i = 0; i < environment.map->height; i++)
   {
-    for(j = 0; j < map->width; j++)
+    for(j = 0; j < environment.map->width; j++)
       free(averageNormals[i][j]);
     free(averageNormals[i]);
   }
   free(averageNormals);
-  
-  for(unsigned int i = 0; i < models.size(); i++)
-  {
-    delete models[i];
-  }
-  for(unsigned int i = 0; i < rings.size(); i++)
-  {
-    delete rings[i];
-  }
-  for(unsigned int i = 0; i < billboards.size(); i++)
-  {
-    delete billboards[i];
-  }
-  models.clear();
-  rings.clear();
-  billboards.clear();
 
   delete renderer;
 
@@ -607,14 +190,11 @@ void getNormal(float *norm,float pointa[3],float pointb[3],float pointc[3])
 //I chose to average the normals to achieve a better lighting effect
 void averageNormal()
 {
-  int i, j, k;
-  float magnitude;
   //averages the normals for each vertex
-  for(i = 0; i < map->height; i++)
+  for(int i = 0; i < environment.map->height; i++)
   {
-    for(j = 0; j < map->width; j++)
+    for(int j = 0; j < environment.map->width; j++)
     {
-
       //the first three if/ else if statements are for the edges, which don't require
       //averaging the normals of the surrounding 4 quads, since there aren't 4 surrounding quads
       if(i == 0 && j == 0)
@@ -647,9 +227,9 @@ void averageNormal()
       }
 
       //normalize the average normal vector
-      magnitude = sqrt(pow(averageNormals[i][j][0],2) + 
+      float magnitude = sqrt(pow(averageNormals[i][j][0],2) + 
         pow(averageNormals[i][j][1],2) + pow(averageNormals[i][j][2],2));
-      for (k = 0; k < 3; k++)
+      for (int k = 0; k < 3; k++)
         averageNormals[i][j][k] /= magnitude;
     }
   }
@@ -660,17 +240,17 @@ void drawObjects()
   glDisable(GL_TEXTURE_2D); //I was told to disable textures for objects, even though they have texture coordinates
 
   //draws each object
-  for(unsigned int i = 0; i < models.size(); i++)
+  for(unsigned int i = 0; i < environment.models.size(); i++)
   {
-    const Point3D &currentPosition = models[i]->GetPosition();
+    const Point3D &currentPosition = environment.models[i]->GetPosition();
     glPushMatrix();
-    glTranslatef((currentPosition.GetX() - 1)*XLEN, 
-      map->grayValues[(int)currentPosition.GetX()-1][(int)currentPosition.GetZ()-1] - (currentPosition.GetY() - .001)*scaleFactor, (currentPosition.GetZ() - 1)*ZLEN);
-    glScalef(scaleFactor, scaleFactor, scaleFactor);
+    glTranslatef((currentPosition.GetX() - 1)*environment.XLEN, 
+      environment.map->grayValues[(int)currentPosition.GetX()-1][(int)currentPosition.GetZ()-1] - (currentPosition.GetY() - .001)*environment.scaleFactor, (currentPosition.GetZ() - 1)*environment.ZLEN);
+    glScalef(environment.scaleFactor, environment.scaleFactor, environment.scaleFactor);
 
-    glCallList(objectList[i] + models[i]->GetCurrentFrame()/animationSpeed);
+    glCallList(objectList[i] + environment.models[i]->GetCurrentFrame()/animationSpeed);
 
-    models[i]->IncrementFrame(animationSpeed);
+    environment.models[i]->IncrementFrame(animationSpeed);
     glPopMatrix();
   }
 }
@@ -679,7 +259,7 @@ void drawObjectList(int modelNum, int frame)
 {
   int i;
 
-  Model *mod = models[modelNum];
+  Model *mod = environment.models[modelNum];
 
   //draws the triangles for every line in the .mod file
   glBegin(GL_TRIANGLES);
@@ -700,18 +280,18 @@ void drawBillboards()
 {
   glEnable(GL_TEXTURE_2D);
   //draws all the billboards
-  for(unsigned int i = 0; i < billboards.size(); i++)
+  for(unsigned int i = 0; i < environment.billboards.size(); i++)
   {
-    Billboard *bb = billboards[i];
-    glBindTexture(GL_TEXTURE_2D, billboardTextures[bb]);
-    bb->Draw(1 / FPS, XLEN, ZLEN, scaleFactor, map, player.GetPosition());
+    Billboard *bb = environment.billboards[i];
+    glBindTexture(GL_TEXTURE_2D, environment.billboardTextures[bb]);
+    bb->Draw(1 / FPS, environment.XLEN, environment.ZLEN, environment.scaleFactor, environment.map, player.GetPosition());
   }
   glDisable(GL_TEXTURE_2D);
 }
 
 void drawTerrain()
 {
-  if(textureExists)
+  if(environment.textureExists)
     glEnable(GL_TEXTURE_2D);
   else
     glDisable(GL_TEXTURE_2D);
@@ -724,13 +304,13 @@ void drawTerrain()
 void drawTerrainVertex(int x, int z, float texCoord1, float texCoord2)
 {
   glNormal3fv(averageNormals[x][z]);
-  if(!textureExists)
-    glColor3f(0, 0, (map->grayValues[x][z] - minHeight)/(maxHeight - minHeight));
+  if(!environment.textureExists)
+    glColor3f(0, 0, (environment.map->grayValues[x][z] - environment.minHeight)/(environment.maxHeight - environment.minHeight));
   else if(stretchTerrainTexture)
-    glTexCoord2f((float)x/map->height, (float)z/map->width);
+    glTexCoord2f((float)x/environment.map->height, (float)z/environment.map->width);
   else
     glTexCoord2f(texCoord1, texCoord2);
-  glVertex3f(x*XLEN, map->grayValues[x][z], z*ZLEN);
+  glVertex3f(x*environment.XLEN, environment.map->grayValues[x][z], z*environment.ZLEN);
 }
 
 void drawTerrainList()
@@ -739,9 +319,9 @@ void drawTerrainList()
   glBegin(GL_QUADS);
   //for each quad, the normal vector is set, and depending on the existance of a texture,
   //either the texture coordinate or color coordinate is set, followed by the vertex itself
-  for (int x = 0; x < map->height - 1; x++)
+  for (int x = 0; x < environment.map->height - 1; x++)
   {
-    for (int z = 0; z < map->width - 1; z++)
+    for (int z = 0; z < environment.map->width - 1; z++)
     {	
       drawTerrainVertex(x,z,0,0);     // draw vertex 0
       drawTerrainVertex(x,z+1,0,1);   // draw vertex 1
@@ -758,7 +338,7 @@ void drawWater()
 
   //sign tells you whether or not you are above or under the water,
   //I use it to show the water level when below the water
-  sign = (player.GetY() - waterHeight)/fabs((player.GetY() - waterHeight));
+  sign = (player.GetY() - environment.waterHeight)/fabs((player.GetY() - environment.waterHeight));
 
   glColor4f(1.0f, 1.0f, 1.0f, 0.4f);	//basically sets alpha level to .4
   glNormal3f(0.0, sign, 0.0);		//normal depends on whether you are above or below water
@@ -767,14 +347,14 @@ void drawWater()
   glDisable(GL_CULL_FACE);
 
   glPushMatrix();
-  glTranslatef(0, waterHeight, 0);
+  glTranslatef(0, environment.waterHeight, 0);
   glCallList(waterList);
 
   glPopMatrix();
   //calculates water oscillation
-  if (waterHeight > waterHeightMax || waterHeight < waterHeightMin)
+  if (environment.waterHeight > waterHeightMax || environment.waterHeight < waterHeightMin)
     waterSign *= -1;
-  waterHeight += waterSign*waterOsc/waterSpeed;
+  environment.waterHeight += waterSign*environment.waterOsc/waterSpeed;
   glEnable(GL_CULL_FACE);
   glDisable(GL_TEXTURE_2D);
 }
@@ -783,22 +363,22 @@ void drawWater()
 void drawWaterList()
 {
   glBegin(GL_QUADS);
-  for (int x = 0; x < map->height - 1; x++)
+  for (int x = 0; x < environment.map->height - 1; x++)
   {
-    for (int z = 0; z < map->width - 1; z++)
+    for (int z = 0; z < environment.map->width - 1; z++)
     {
       // draw vertex 0
       glTexCoord2f(0.0f, 0.0f);
-      glVertex3f(x*XLEN, 0, z*ZLEN);
+      glVertex3f(x*environment.XLEN, 0, z*environment.ZLEN);
       // draw vertex 1
       glTexCoord2f(0.0f, 1.0f);
-      glVertex3f(x*XLEN, 0, (z+1)*ZLEN);
+      glVertex3f(x*environment.XLEN, 0, (z+1)*environment.ZLEN);
       // draw vertex 2
       glTexCoord2f(1.0f, 1.0f);
-      glVertex3f((x+1)*XLEN, 0, (z+1)*ZLEN);
+      glVertex3f((x+1)*environment.XLEN, 0, (z+1)*environment.ZLEN);
       // draw vertex 3
       glTexCoord2f(1.0f, 0.0f);
-      glVertex3f((x+1)*XLEN, 0, z*ZLEN);
+      glVertex3f((x+1)*environment.XLEN, 0, z*environment.ZLEN);
     }
   }
   glEnd();
@@ -815,16 +395,16 @@ void drawSkySphere()
 
   //translation makes the skydome center the center of the map
   glPushMatrix();
-  glTranslatef(map->height * XLEN/2, 0.5*(maxHeight - minHeight), map->width * ZLEN/2);
-  glRotatef((float)angle/skySpeed, 0, 1, 0);
-  angle += skydomeAngle;
-  if (angle > 360*skySpeed)		//prevents the angle value from spiraling out of control!
-    angle -= 360*skySpeed;
+  glTranslatef(environment.map->height * environment.XLEN/2, 0.5*(environment.maxHeight - environment.minHeight), environment.map->width * environment.ZLEN/2);
+  glRotatef((float)environment.angle/skySpeed, 0, 1, 0);
+  environment.angle += environment.skydomeAngle;
+  if (environment.angle > 360*skySpeed)		//prevents the angle value from spiraling out of control!
+    environment.angle -= 360*skySpeed;
 
   glDisable(GL_CULL_FACE);
   glDisable(GL_LIGHTING);
 
-  glBindTexture(GL_TEXTURE_2D, skyTexture); //texture array is filled before to include the sky texture
+  glBindTexture(GL_TEXTURE_2D, environment.skyTexture); //texture array is filled before to include the sky texture
 
   quadratic=gluNewQuadric();			// Create A Pointer To The Quadric Object (Return 0 If No Memory) (NEW)
 
@@ -837,7 +417,7 @@ void drawSkySphere()
   // geometry to find the minimum radius such that all four
   // corners are within the sphere, then doubled it in case
   // the corners themselves were raised, plus I think it looks better
-  gluSphere(quadratic, skyRadius, 32, 32);
+  gluSphere(quadratic, environment.skyRadius, 32, 32);
 
   if (light_enabled) glEnable(GL_LIGHTING);
 
@@ -859,21 +439,25 @@ void drawSuns()
 
   glColor3f(1.0, 1.0, 1.0);
 
+  Image *map = environment.map;
+  int XLEN = environment.XLEN;
+  int ZLEN = environment.ZLEN;
+
   //if both suns exist, only switch suns 1% of the time (otherwise it flickers too much!)
-  if(sun1Exists && sun2Exists)
+  if(environment.sun1Exists && environment.sun2Exists)
   {
     if(rand()%500 + 1 > 499)
     {
-      if(currentSun == &sunTexture1)
-        currentSun = &sunTexture2;
+      if(environment.currentSun == &environment.sunTexture1)
+        environment.currentSun = &environment.sunTexture2;
       else
-        currentSun = &sunTexture1;
+        environment.currentSun = &environment.sunTexture1;
     }
   }
-  glBindTexture(GL_TEXTURE_2D, *currentSun);
+  glBindTexture(GL_TEXTURE_2D, *environment.currentSun);
 
   lookAt[0] = map->height*XLEN - player.GetX();			//x component of lookAt vector
-  lookAt[1] = 3*(maxHeight - minHeight) - player.GetY();	//y component of lookAt vector
+  lookAt[1] = 3*(environment.maxHeight - environment.minHeight) - player.GetY();	//y component of lookAt vector
   lookAt[2] = map->width*ZLEN - player.GetZ();			//z component of lookAt vector
   xzAngle = atan(lookAt[0]/lookAt[2])*180/M_PI;			//calculate angle on xz plane
   if (player.GetZ() > (map->width*ZLEN))					//accounts for sign issues with atan
@@ -884,7 +468,7 @@ void drawSuns()
 
   glPushMatrix();
   //moves and rotates the sun to have billboarding effect
-  glTranslatef(map->height*XLEN, 3*(maxHeight - minHeight), map->width*ZLEN);
+  glTranslatef(map->height*XLEN, 3*(environment.maxHeight - environment.minHeight), map->width*ZLEN);
   glRotatef(xzAngle, 0, 1, 0);
   glRotatef(yAngle, -1, 0, 0);
 
@@ -928,7 +512,7 @@ void drawFog()
   glFogf(GL_FOG_DENSITY, 0.01f);			// How Dense Will The Fog Be
   glHint(GL_FOG_HINT, GL_NICEST);			// Fog Hint Value
   glFogf(GL_FOG_START, 0);				// Fog Start
-  glFogf(GL_FOG_END  , skyRadius);		// Fog End
+  glFogf(GL_FOG_END  , environment.skyRadius);		// Fog End
 }
 
 void drawLight()
@@ -995,17 +579,20 @@ void draw2d()
 void UpdateCamera()
 {
   //updates the light position, making it stationary relative to the terrain
-  GLfloat LightPosition[]= {map->height*XLEN, 5*(maxHeight - minHeight), map->width*ZLEN, 1.0f};
+  GLfloat LightPosition[]= {environment.map->height*environment.XLEN, 5*(environment.maxHeight - environment.minHeight), environment.map->width*environment.ZLEN, 1.0f};
   glLightfv(GL_LIGHT0, GL_POSITION, LightPosition);
 }
 
 float setHeight()
 {
-  int x, z;
-  float d1;
+  Image *map = environment.map;
+  int ZLEN = environment.ZLEN;
+  int XLEN = environment.XLEN;
 
-  x = floor(player.GetX()/XLEN);
-  z = floor(player.GetZ()/ZLEN);
+  float d1 = 0;
+
+  int x = floor(player.GetX()/environment.XLEN);
+  int z = floor(player.GetZ()/environment.ZLEN);
 
   if(x == 127)
     x--;
@@ -1025,9 +612,7 @@ float setHeight()
       + map->grayValues[x][z+1];
   }
 
-  d1 = d1 + player.GetHeight();//6 - crouchFactor;
-
-  return d1;
+  return d1 + player.GetHeight();
 }
 
 void jump(float FPS, float terrainHeight)
@@ -1044,9 +629,9 @@ void jump(float FPS, float terrainHeight)
 
     if(player.healthBar.IsEmpty())
     {
-      for(unsigned int i = 0; i < rings.size(); i++)
+      for(unsigned int i = 0; i < environment.rings.size(); i++)
       {
-        rings[i]->SetPassed(false);
+        environment.rings[i]->SetPassed(false);
       }
       player.healthBar.IncreaseEnergy(1.0);
     }
@@ -1067,23 +652,23 @@ void jump(float FPS, float terrainHeight)
     }
 
     int ringsPassed = 0;
-    for(unsigned int i = 0; i < rings.size(); i++)
+    for(unsigned int i = 0; i < environment.rings.size(); i++)
     {
-      if(rings[i]->isPassed())
+      if(environment.rings[i]->isPassed())
       {
         ringsPassed++;
       }
     }
-    bool allRingsPassed = ringsPassed == rings.size();
+    bool allRingsPassed = ringsPassed == environment.rings.size();
     if(!allRingsPassed)
     {
       if(ringsPassed > 0)
       {
         failureSound = true;
       }
-      for(unsigned int i = 0; i < rings.size(); i++)
+      for(unsigned int i = 0; i < environment.rings.size(); i++)
       {
-        rings[i]->SetPassed(false);
+        environment.rings[i]->SetPassed(false);
       }
     }
     failureSound = !allRingsPassed && ringsPassed > 0;
@@ -1099,12 +684,12 @@ void display(SDL_Window *window)
   // clear screen and depth buffer
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  if(skyExists)		//draws the sky
+  if(environment.skyExists)		//draws the sky
     drawSkySphere();
 
   //terrain drawing
-  if(textureExists)
-    glBindTexture(GL_TEXTURE_2D, terrainTexture);
+  if(environment.textureExists)
+    glBindTexture(GL_TEXTURE_2D, environment.terrainTexture);
   if(light_enabled)
     glCallList(landLightList);
   drawTerrain();
@@ -1113,11 +698,11 @@ void display(SDL_Window *window)
   glDepthMask(GL_FALSE);								//enable read-only depth buffer
 
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);	//set the blend function for drawing the water
-  if(waterExists)
+  if(environment.waterExists)
   {
     if(glIsEnabled(GL_LIGHTING))
       glCallList(waterLightList);
-    glBindTexture(GL_TEXTURE_2D, waterTexture);
+    glBindTexture(GL_TEXTURE_2D, environment.waterTexture);
     drawWater();
   }
 
@@ -1127,7 +712,7 @@ void display(SDL_Window *window)
 
   glDisable(GL_FOG);		//I don't want fog when drawing billboards and suns, as it throws off the blending
   drawBillboards();
-  if(currentSun != NULL) //draws sun(s) if any sun texture was successfully loaded
+  if(environment.currentSun != NULL) //draws sun(s) if any sun texture was successfully loaded
     drawSuns();
 
   glDepthMask(GL_TRUE);								//set back to normal depth buffer mode (writable)
@@ -1141,14 +726,14 @@ void display(SDL_Window *window)
 
   if(glIsEnabled(GL_LIGHTING))
     glCallList(objectLightList);
-  drawObjects();		//draw objects
+  drawObjects();  //draw objects
 
-  for(unsigned int i = 0; i < rings.size(); i++)
+  for(unsigned int i = 0; i < environment.rings.size(); i++)
   {
-    bool newlyPassed = rings[i]->UpdatePassedStatus(player.GetPosition());
+    bool newlyPassed = environment.rings[i]->UpdatePassedStatus(player.GetPosition(), environment.XLEN, environment.ZLEN);
     if(newlyPassed) passedSound = true;
     //rings[i]->drawRing(1/FPS);
-    rings[i]->UpdateRotation(1/FPS);
+    environment.rings[i]->UpdateRotation(1/FPS);
   }
 
   renderer->Render3D(1 / FPS, player.GetPosition());
@@ -1169,18 +754,20 @@ void display(SDL_Window *window)
 //function to initialize the projection and some variables. 
 void Initialize(SDL_Window *window)
 {
-  read_environment(environmentFile); //read the environment file
+  Image *map = environment.map;
+  int XLEN = environment.XLEN;
+  int ZLEN = environment.ZLEN;
 
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);		// clear to black
   glViewport(0, 0, width, height);
   glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
 
-  skyRadius = sqrt(pow(map->height * XLEN, 2.0) + pow(map->width * ZLEN, 2.0) + pow(3*(maxHeight - minHeight), 2.0f));
+  environment.skyRadius = sqrt(pow(map->height * XLEN, 2.0) + pow(map->width * ZLEN, 2.0) + pow(3*(environment.maxHeight - environment.minHeight), 2.0f));
 
   //initialize the projection
   glMatrixMode(GL_PROJECTION);
   glLoadIdentity();
-  gluPerspective(54, (float)width/height, 1, 2*skyRadius);
+  gluPerspective(54, (float)width/height, 1, 2*environment.skyRadius);
   glMatrixMode(GL_MODELVIEW);
 
   glShadeModel(GL_SMOOTH);					    //use smooth shading
@@ -1194,7 +781,7 @@ void Initialize(SDL_Window *window)
   {
     for (int j = 0; j < map->width; j++)
     {
-      map->grayValues[i][j] = (maxHeight - minHeight)*map->grayValues[i][j]/map->maxval + minHeight;
+      map->grayValues[i][j] = (environment.maxHeight - environment.minHeight)*map->grayValues[i][j]/map->maxval + environment.minHeight;
     }
   }
 
@@ -1396,8 +983,8 @@ void Initialize(SDL_Window *window)
 
   srand(time(NULL));	//seeds the random function
 
-  waterHeightMax = waterHeight + waterOsc;	//set up water heights
-  waterHeightMin = waterHeight - waterOsc;
+  waterHeightMax = environment.waterHeight + environment.waterOsc;	//set up water heights
+  waterHeightMin = environment.waterHeight - environment.waterOsc;
 
   oldY = height/2;
 
@@ -1420,11 +1007,11 @@ void Initialize(SDL_Window *window)
   glEndList();
 
   //creates call lists for each frame of each object
-  objectList = new GLuint[models.size()];
-  for(unsigned int i = 0; i < models.size(); i++)
+  objectList = new GLuint[environment.models.size()];
+  for(unsigned int i = 0; i < environment.models.size(); i++)
   {
-    objectList[i] = glGenLists(models[i]->GetNumFrames());
-    for(int j = 0; j < models[i]->GetNumFrames(); j++)
+    objectList[i] = glGenLists(environment.models[i]->GetNumFrames());
+    for(int j = 0; j <environment. models[i]->GetNumFrames(); j++)
     {
       glNewList(objectList[i] + j, GL_COMPILE);
       drawObjectList(i, j);
@@ -1475,9 +1062,9 @@ void Initialize(SDL_Window *window)
   renderer->ringLightingNotPassedList = ringLightingNotPassedList;
   renderer->ringLightingPassedList = ringLightingPassedList;
 
-  for(unsigned int i = 0; i < rings.size(); i++)
+  for(unsigned int i = 0; i < environment.rings.size(); i++)
   {
-    renderer->AddSphereRing(rings[i]);
+    renderer->AddSphereRing(environment.rings[i]);
   }
 }
 
@@ -1547,13 +1134,23 @@ int main(int argc, char **argv)
     return -1;
   }
 
+  environment.Parse(environmentFile);
+
+  Image *map = environment.map;
+  int XLEN = environment.XLEN;
+  int ZLEN = environment.ZLEN;
+
+  renderer = new Renderer(width, height, XLEN, ZLEN);
+  renderer->healthBar = &player.healthBar;
+  renderer->jetpackBar = &player.jetPack;
+
   Initialize(window);
 
   heightTemp = map->grayValues[0][0] * 50;
 
   for(int i = 0; i < 50; i++)
     elev[i] = map->grayValues[0][0];
-  
+
   Mix_PlayMusic(music, -1);
 
   //Keep looping until the user closes the SDL window

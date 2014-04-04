@@ -32,7 +32,7 @@ public:
   void ParseSun(const std::vector<std::string> &subStrings);
   void ParseRing(const std::vector<std::string> &subStrings);
 
-  bool LoadTextures(const char *filename, GLuint *texture, int &width, int &height);
+  bool LoadTextures(const std::string &filename, GLuint *texture, int &width, int &height);
   
   //variables storing which things exist
   bool textureExists; //whether a texture will cover the terrain

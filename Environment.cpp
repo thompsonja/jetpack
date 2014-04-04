@@ -7,6 +7,14 @@
 #include "Model.h"
 #include "FreeImage.h"
 
+//Textures
+extern GLuint terrainTexture;
+extern GLuint waterTexture;
+extern GLuint skyTexture;
+extern GLuint sunTexture1;
+extern GLuint sunTexture2;
+extern std::map<Billboard*, GLuint> billboardTextures;
+
 Environment::Environment() :
   textureExists(false),
   waterExists(false),
@@ -65,9 +73,13 @@ void Environment::SplitLine(std::string str, std::vector<std::string> &out, char
   // Decompose statement
   while(pos != std::string::npos)
   {
-    out.push_back(str.substr(initialPos, pos - initialPos + 1));
+    out.push_back(str.substr(initialPos, pos - initialPos));
     initialPos = pos + 1;
 
+    while(initialPos != std::string::npos && str[initialPos] == ch)
+    {
+      initialPos++;
+    }
     pos = str.find(ch, initialPos);
   }
 
@@ -77,9 +89,7 @@ void Environment::SplitLine(std::string str, std::vector<std::string> &out, char
 
 void Environment::Parse(std::string filename)
 {
-  int failCount = 0;
-
-  printf("Loading environment file: %s\n", filename);
+  printf("Loading environment file: %s\n", filename.c_str());
   FILE *f = fopen(filename.c_str(), "r");
 
   //grabs a new line from the env. file
@@ -87,22 +97,24 @@ void Environment::Parse(std::string filename)
   while(fgets(temp, 128*sizeof(char), f) != NULL)
   {
     std::vector<std::string> subStrings;
-    SplitLine(std::string(temp), subStrings);
+    std::string str(temp);
+    str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
+    SplitLine(str, subStrings);
     if(subStrings.size() <= 1)
     {
       continue;
     }
 
-    std::string &keyword = subStrings[1];
+    std::string keyword = subStrings[0];
 
     if(parsers.find(keyword) != parsers.end())
     {
       subStrings.erase(subStrings.begin());
       (this->*parsers[keyword])(subStrings);
     }
-
-    printf("Loading complete, executing program\n");
   }
+
+  printf("Loading complete, executing program\n");
 }
 
 void Environment::ParseHeightMapDefinition(const std::vector<std::string> &subStrings)
@@ -171,11 +183,11 @@ void Environment::ParseTexture(const std::vector<std::string> &subStrings)
 
   //Loads the texture and sets the textureExists parameter
   int width, height;
-  textureExists = LoadTextures(textureFilename.c_str(), &terrainTexture, width, height);
+  textureExists = LoadTextures(textureFilename, &terrainTexture, width, height);
   if(textureExists)
     printf("DONE\n");
   else
-    printf("FAILED\n\t\tCould not open texture: %s\n", textureFilename);
+    printf("FAILED\n\t\tCould not open texture: %s\n", textureFilename.c_str());
 
   readTexture = true;
 }
@@ -197,11 +209,11 @@ void Environment::ParseModel(const std::vector<std::string> &subStrings)
   //inserts the object into the linked list
   if(modelType.compare("Static") != 0 && modelType.compare("Animated") != 0)
   {
-    printf("Invalid model type: %s\n", modelType);
+    printf("Invalid model type: %s\n", modelType.c_str());
     return;
   }
 
-  printf("	Loading %s object . . . . ", modelType);
+  printf("	Loading %s object . . . . ", modelType.c_str());
   if(objx > map->height || objz > map->width)
   {
     printf("FAILED\n\t\tObject outside of terrain\n");
@@ -215,7 +227,6 @@ void Environment::ParseModel(const std::vector<std::string> &subStrings)
   {
     models.back()->SetStartPosition(Point2D(objx, objz));
   }
-  printf("DONE\n");
 }
 
 void Environment::ParseBillboard(const std::vector<std::string> &subStrings)
@@ -236,7 +247,7 @@ void Environment::ParseBillboard(const std::vector<std::string> &subStrings)
   Billboard *newBillboard = new Billboard(Point3D(billboardX, map->grayValues[billboardX-1][billboardZ-1], billboardZ));
   
   int width, height;
-  if(LoadTextures(billboardFilename.c_str(), &billboardTextures[newBillboard], width, height))		//if it loads the texture correctly
+  if(LoadTextures(billboardFilename, &billboardTextures[newBillboard], width, height))		//if it loads the texture correctly
   {
     newBillboard->width = width;
     newBillboard->height = height;
@@ -244,7 +255,7 @@ void Environment::ParseBillboard(const std::vector<std::string> &subStrings)
   }
   else
   {
-    printf("FAILED\n\t\tCould not open billboard: %s\n", billboardFilename);
+    printf("FAILED\n\t\tCould not open billboard: %s\n", billboardFilename.c_str());
   }
 
   printf("DONE\n");
@@ -270,7 +281,7 @@ void Environment::ParseSkydome(const std::vector<std::string> &subStrings)
   angle = skydomeAngle; //set angle to skydomeAngle, since angle is what's actually going to be increased
 
   int width, height;
-  skyExists = LoadTextures(skydomeTextureFilename.c_str(), &skyTexture, width, height);
+  skyExists = LoadTextures(skydomeTextureFilename, &skyTexture, width, height);
   if(skyExists)
   {
     printf("DONE\n");
@@ -278,7 +289,7 @@ void Environment::ParseSkydome(const std::vector<std::string> &subStrings)
   }
   else
   {
-    printf("FAILED\n\t\tCould not open texture: %s\n", skydomeTextureFilename);
+    printf("FAILED\n\t\tCould not open texture: %s\n", skydomeTextureFilename.c_str());
   }
 }
 
@@ -302,14 +313,14 @@ void Environment::ParseWater(const std::vector<std::string> &subStrings)
   waterOsc = atof(subStrings[2].c_str());
 
   int width, height;
-  if(waterExists = LoadTextures(skydomeTextureFilename.c_str(), &waterTexture, width, height))
+  if(waterExists = LoadTextures(skydomeTextureFilename, &waterTexture, width, height))
   {
     printf("DONE\n");
     readWater = true;
   }
   else
   {
-    printf("FAILED\n\t\tCould not open texture: %s\n", skydomeTextureFilename);
+    printf("FAILED\n\t\tCould not open texture: %s\n", skydomeTextureFilename.c_str());
   }
 }
 
@@ -333,17 +344,17 @@ void Environment::ParseSun(const std::vector<std::string> &subStrings)
   printf("	Loading sun texture 1 . . . . ");
 
   int width, height;
-  sun1Exists = LoadTextures(sunTexture1Filename.c_str(), &sunTexture1, width, height); //load texture
+  sun1Exists = LoadTextures(sunTexture1Filename, &sunTexture1, width, height); //load texture
   if(sun1Exists)
   {
     printf("DONE\n");
     currentSun = &sunTexture1;
   }
   else
-    printf("FAILED\n\t\tCould not open sun: %s", sunTexture1Filename);
+    printf("FAILED\n\t\tCould not open sun: %s", sunTexture1Filename.c_str());
 
   printf("	Loading sun texture 2 . . . . ");
-  sun2Exists = LoadTextures(sunTexture2Filename.c_str(), &sunTexture2, width, height); //load texture
+  sun2Exists = LoadTextures(sunTexture2Filename, &sunTexture2, width, height); //load texture
   if(sun2Exists)
   {
     printf("DONE\n");
@@ -352,7 +363,7 @@ void Environment::ParseSun(const std::vector<std::string> &subStrings)
   }
   else
   {
-    printf("FAILED\n\t\tCould not open sun: %s", sunTexture2Filename);
+    printf("FAILED\n\t\tCould not open sun: %s", sunTexture2Filename.c_str());
   }
 }
 
@@ -380,26 +391,26 @@ void Environment::ParseRing(const std::vector<std::string> &subStrings)
 }
 
 //Load bmps and convert to textures
-bool Environment::LoadTextures(const char *filename, GLuint *texture, int &width, int &height)
+bool Environment::LoadTextures(const std::string &filename, GLuint *texture, int &width, int &height)
 {
-  FREE_IMAGE_FORMAT format = FreeImage_GetFileType(filename);
+  FREE_IMAGE_FORMAT format = FreeImage_GetFileType(filename.c_str());
   if(format == FIF_UNKNOWN)
   {
-    printf("Unknown image format for file %s\n", filename);
+    printf("Unknown image format for file %s\n", filename.c_str());
     return false;
   }
 
-  FIBITMAP *tex = FreeImage_Load(format, filename);
+  FIBITMAP *tex = FreeImage_Load(format, filename.c_str());
   if(tex == NULL)
   {
-    printf("FreeImage failed to load file %s\n", filename);
+    printf("FreeImage failed to load file %s\n", filename.c_str());
     return false;
   }
 
   FIBITMAP *tex32 = FreeImage_ConvertTo32Bits(tex);
   if(tex32 == NULL)
   {
-    printf("FreeImage failed to convert file %s to 32 bit format\n", filename);
+    printf("FreeImage failed to convert file %s to 32 bit format\n", filename.c_str());
     return false;
   }
 

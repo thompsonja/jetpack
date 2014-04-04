@@ -12,7 +12,7 @@ class Point3D;
 class Renderer
 {
 public:
-  Renderer(int width, int height);
+  Renderer(int width, int height, int XLEN, int ZLEN);
   void Render2D(double dt);
   void Render3D(double dt, const Point3D &playerPosition);
   void AddSphereRing(SphereRing *ring);
@@ -25,6 +25,8 @@ private:
   void DrawSphereRings(double dt, const Point3D &playerPosition);
   int width;
   int height;
+  int XLEN;
+  int ZLEN;
   std::map<SphereRing*, GLuint> ringLists;
 };
 

@@ -8,7 +8,7 @@ class SphereRing
 public:
 	SphereRing(const Point3D &position, double rotationRate, int num, double sphRad, double rRad);
   //void drawList();
-  bool UpdatePassedStatus(const Point3D &playerPosition);
+  bool UpdatePassedStatus(const Point3D &playerPosition, int XLEN, int ZLEN);
   void UpdateRotation(double dt);
   //void drawRing(double dt);
   bool isPassed();
