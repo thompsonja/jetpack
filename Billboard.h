@@ -2,6 +2,7 @@
 #define BILLBOARD_H
 
 #include "Point.h"
+#include <memory>
 
 class Image;
 
@@ -10,7 +11,7 @@ class Billboard
 {
 public:
   Billboard(Point3D position);
-  void Draw(double dt, int xLength, int zLength, float scaleFactor, const Image * const map, const Point3D &playerPos);
+  void Draw(double dt, int xLength, int zLength, float scaleFactor, const std::shared_ptr<Image> &map, const Point3D &playerPos);
   int width, height;
 private:
   Point3D position;

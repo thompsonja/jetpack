@@ -1,14 +1,16 @@
 #ifndef OBSERVER_H
 #define OBSERVER_H
 
+#include <algorithm>
 #include <vector>
+#include <memory>
 
 template<class T> class IObserver
 {
 public:
   IObserver(){}
   virtual ~IObserver(){}
-  virtual void OnNotify(const T *subject, void *param) = 0;
+  virtual void OnNotify(const T &subject, void *param) = 0;
 };
 
 template<class T> class ISubject
@@ -20,15 +22,21 @@ public:
   {
     observers.push_back(observer);
   }
-  void NotifyListeners(const T *msg, void *param = NULL)
+
+  void RemoveObserver(IObserver<T> *observer)
   {
-    for(unsigned int i = 0; i < observers.size(); i++)
+    observers.erase(std::remove(observers.begin(), observers.end(), observer), observers.end());
+  }
+
+  void NotifyListeners(const T &msg, void *param = NULL)
+  {
+    for(auto& s : observers)
     {
-      OnNotify(msg, param)
+      s->OnNotify(msg, param);
     }
   }
 private:
-  std::vector<IObserver<T>*> observers;
+  std::vector<std::shared_ptr<IObserver<T>>> observers;
 };
 
 #endif

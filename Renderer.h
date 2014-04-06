@@ -4,6 +4,7 @@
 #include <Windows.h>
 #include <glut.h>
 #include <map>
+#include <memory>
 
 class EnergyBar;
 class SphereRing;
@@ -17,7 +18,7 @@ public:
   void InitLight();
   void Render2D(double dt);
   void Render3D(double dt, const Point3D &playerPosition);
-  void AddSphereRing(SphereRing *ring);
+  void AddSphereRing(std::shared_ptr<SphereRing> ring);
   EnergyBar *healthBar;
   EnergyBar *jetpackBar;
   GLuint ringLightingNotPassedList;
@@ -29,7 +30,7 @@ private:
   int height;
   int XLEN;
   int ZLEN;
-  std::map<SphereRing*, GLuint> ringLists;
+  std::map<std::shared_ptr<SphereRing>, GLuint> ringLists;
 };
 
 #endif

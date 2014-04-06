@@ -121,7 +121,7 @@ void Renderer::DrawEnergyBar(EnergyBar *bar, int x, int y, int width, int height
 	glEnd();
 }
 
- void Renderer::AddSphereRing(SphereRing *ring)
+ void Renderer::AddSphereRing(std::shared_ptr<SphereRing> ring)
  {
    if(ringLists.find(ring) != ringLists.end())
    {
@@ -155,9 +155,9 @@ void Renderer::DrawEnergyBar(EnergyBar *bar, int x, int y, int width, int height
 
  void Renderer::DrawSphereRings(double dt, const Point3D &playerPosition)
  {
-   for(std::map<SphereRing*, GLuint>::iterator i = ringLists.begin(); i != ringLists.end(); i++)
+   for(auto i = ringLists.begin(); i != ringLists.end(); i++)
    {
-     SphereRing *ring = i->first;
+     std::shared_ptr<SphereRing> ring = i->first;
      if(ring == NULL)
      {
        // TODO error

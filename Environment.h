@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <memory>
 
 class SphereRing;
 class Billboard;
@@ -16,7 +17,6 @@ class Environment
 {
 public:
   Environment();
-  ~Environment();
   void Parse(std::string filename);
 
   typedef void (Environment::*LineParser)(const std::vector<std::string> &subStrings);
@@ -54,13 +54,13 @@ public:
 
   float scaleFactor; //how much to scale objects/billboards
 
-  std::vector<SphereRing*> rings;
-  std::vector<Billboard*> billboards;
-  std::vector<Model*> models;
+  std::vector<std::shared_ptr<SphereRing>> rings;
+  std::vector<std::shared_ptr<Billboard>> billboards;
+  std::vector<std::shared_ptr<Model>> models;
 
   std::map<std::string, LineParser> parsers;
 
-  Image *map;
+  std::shared_ptr<Image> map;
 
   bool readHeight;
   bool readTexture;
@@ -75,7 +75,7 @@ public:
   GLuint skyTexture;
   GLuint sunTexture1;
   GLuint sunTexture2;
-  std::map<Billboard*, GLuint> billboardTextures;
+  std::map<std::shared_ptr<Billboard>, GLuint> billboardTextures;
   GLuint *currentSun;
 };
 

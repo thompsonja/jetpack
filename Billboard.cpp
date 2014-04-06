@@ -9,7 +9,7 @@ Billboard::Billboard(Point3D position) :
 {
 }
 
-void Billboard::Draw(double dt, int xLength, int zLength, float scaleFactor, const Image * const map, const Point3D &playerPos)
+void Billboard::Draw(double dt, int xLength, int zLength, float scaleFactor, const std::shared_ptr<Image> &map, const Point3D &playerPos)
 {
   int xPos = position.GetX();
   int zPos = position.GetZ();

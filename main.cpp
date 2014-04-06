@@ -73,6 +73,7 @@ to be outside of the terrain.
 #include "Audio.h"
 #include <vector>
 #include <map>
+#include <memory>
 
 bool stretchTerrainTexture = false;
 int width=1280, height=960;			//initial window values
@@ -136,7 +137,7 @@ Light landlight, waterlight, objectlight, billboardlight, ringlighta, ringlightb
 User player;
 Box box(8, 3, 8, Point3D(10, 10, 10));
 
-Renderer *renderer = NULL;
+std::shared_ptr<Renderer> renderer;
 Environment environment;
 
 void quit()
@@ -149,8 +150,6 @@ void quit()
     free(averageNormals[i]);
   }
   free(averageNormals);
-
-  delete renderer;
 
   SDL_Quit();
   exit(1);
@@ -260,13 +259,11 @@ void drawObjects()
 
 void drawObjectList(int modelNum, int frame)
 {
-  int i;
-
-  Model *mod = environment.models[modelNum];
+  auto mod = environment.models[modelNum];
 
   //draws the triangles for every line in the .mod file
   glBegin(GL_TRIANGLES);
-  for(i = 0; i < mod->GetLinesAtFrame(frame); i++)
+  for(int i = 0; i < mod->GetLinesAtFrame(frame); i++)
   {
     const Point3D &normal = mod->GetNormal(frame, i);
     const Point2D &texture = mod->GetTexture(frame, i);
@@ -283,9 +280,8 @@ void drawBillboards()
 {
   glEnable(GL_TEXTURE_2D);
   //draws all the billboards
-  for(unsigned int i = 0; i < environment.billboards.size(); i++)
+  for(auto &bb : environment.billboards)
   {
-    Billboard *bb = environment.billboards[i];
     glBindTexture(GL_TEXTURE_2D, environment.billboardTextures[bb]);
     bb->Draw(1 / FPS, environment.XLEN, environment.ZLEN, environment.scaleFactor, environment.map, player.GetPosition());
   }
@@ -440,7 +436,7 @@ void drawSuns()
 
   glColor3f(1.0, 1.0, 1.0);
 
-  Image *map = environment.map;
+  auto map = environment.map;
   int XLEN = environment.XLEN;
   int ZLEN = environment.ZLEN;
 
@@ -512,7 +508,7 @@ void UpdateCamera()
 
 float setHeight()
 {
-  Image *map = environment.map;
+  auto map = environment.map;
   int ZLEN = environment.ZLEN;
   int XLEN = environment.XLEN;
 
@@ -556,9 +552,9 @@ void jump(float FPS, float terrainHeight)
 
     if(player.healthBar.IsEmpty())
     {
-      for(unsigned int i = 0; i < environment.rings.size(); i++)
+      for(auto &ring : environment.rings)
       {
-        environment.rings[i]->SetPassed(false);
+        ring->SetPassed(false);
       }
       player.healthBar.IncreaseEnergy(1.0);
     }
@@ -579,9 +575,9 @@ void jump(float FPS, float terrainHeight)
     }
 
     int ringsPassed = 0;
-    for(unsigned int i = 0; i < environment.rings.size(); i++)
+    for(auto &ring : environment.rings)
     {
-      if(environment.rings[i]->isPassed())
+      if(ring->isPassed())
       {
         ringsPassed++;
       }
@@ -593,9 +589,9 @@ void jump(float FPS, float terrainHeight)
       {
         failureSound = true;
       }
-      for(unsigned int i = 0; i < environment.rings.size(); i++)
+      for(auto &ring : environment.rings)
       {
-        environment.rings[i]->SetPassed(false);
+        ring->SetPassed(false);
       }
     }
     failureSound = !allRingsPassed && ringsPassed > 0;
@@ -655,15 +651,14 @@ void display(SDL_Window *window)
     glCallList(objectLightList);
   drawObjects();  //draw objects
 
-  for(unsigned int i = 0; i < environment.rings.size(); i++)
+  for(auto &ring : environment.rings)
   {
-    bool newlyPassed = environment.rings[i]->UpdatePassedStatus(player.GetPosition(), environment.XLEN, environment.ZLEN);
+    bool newlyPassed = ring->UpdatePassedStatus(player.GetPosition(), environment.XLEN, environment.ZLEN);
     if(newlyPassed) passedSound = true;
-    //rings[i]->drawRing(1/FPS);
-    environment.rings[i]->UpdateRotation(1/FPS);
+    ring->UpdateRotation(1/FPS);
   }
 
-  if(renderer) renderer->Render3D(1 / FPS, player.GetPosition());
+  renderer->Render3D(1 / FPS, player.GetPosition());
 
   if(box.Exists())
     drawBox();
@@ -672,7 +667,7 @@ void display(SDL_Window *window)
 
   player.UpdatePos(dx*mouseXsens, dy*mouseYsens);
 
-  if(renderer) renderer->Render2D(1 / FPS);
+  renderer->Render2D(1 / FPS);
 
   glFlush();
   SDL_GL_SwapWindow(window);
@@ -681,7 +676,7 @@ void display(SDL_Window *window)
 //function to initialize the projection and some variables. 
 void Initialize(SDL_Window *window)
 {
-  Image *map = environment.map;
+  auto map = environment.map;
   int XLEN = environment.XLEN;
   int ZLEN = environment.ZLEN;
 
@@ -989,9 +984,9 @@ void Initialize(SDL_Window *window)
   renderer->ringLightingNotPassedList = ringLightingNotPassedList;
   renderer->ringLightingPassedList = ringLightingPassedList;
 
-  for(unsigned int i = 0; i < environment.rings.size(); i++)
+  for(auto &ring : environment.rings)
   {
-    renderer->AddSphereRing(environment.rings[i]);
+    renderer->AddSphereRing(ring);
   }
 }
 
@@ -1045,11 +1040,11 @@ int main(int argc, char **argv)
 
   environment.Parse(environmentFile);
 
-  Image *map = environment.map;
+  auto map = environment.map;
   int XLEN = environment.XLEN;
   int ZLEN = environment.ZLEN;
 
-  renderer = new Renderer(width, height, XLEN, ZLEN);
+  renderer = std::make_shared<Renderer>(width, height, XLEN, ZLEN);
   renderer->healthBar = &player.healthBar;
   renderer->jetpackBar = &player.jetPack;
 

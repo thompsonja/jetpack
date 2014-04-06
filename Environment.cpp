@@ -1,4 +1,3 @@
-#include <algorithm>
 #include "Environment.h"
 #include "SphereRing.h"
 #include "Point.h"
@@ -6,6 +5,7 @@
 #include "Image.h"
 #include "Model.h"
 #include "FreeImage.h"
+#include <algorithm>
 
 Environment::Environment() :
   textureExists(false),
@@ -35,25 +35,6 @@ Environment::Environment() :
   parsers["WATER"] = &Environment::ParseWater;
   parsers["SUN"] = &Environment::ParseSun;
   parsers["RING"] = &Environment::ParseRing;
-}
-
-Environment::~Environment()
-{
-  for(unsigned int i = 0; i < models.size(); i++)
-  {
-    delete models[i];
-  }
-  for(unsigned int i = 0; i < rings.size(); i++)
-  {
-    delete rings[i];
-  }
-  for(unsigned int i = 0; i < billboards.size(); i++)
-  {
-    delete billboards[i];
-  }
-  models.clear();
-  rings.clear();
-  billboards.clear();
 }
 
 void Environment::SplitLine(std::string str, std::vector<std::string> &out, char ch)
@@ -125,7 +106,7 @@ void Environment::ParseHeightMapDefinition(const std::vector<std::string> &subSt
   }
 
   const std::string &filename = subStrings[0];
-  map = new Image(filename);
+  map = std::make_shared<Image>(filename);
   minHeight = atof(subStrings[1].c_str());
   maxHeight = atof(subStrings[2].c_str());
   
@@ -214,7 +195,7 @@ void Environment::ParseModel(const std::vector<std::string> &subStrings)
 
   Model::AnimationType animationType = modelType.compare("Static") == 0 ? Model::MODEL_STATIC : Model::MODEL_ANIMATED;
 
-  models.push_back(new Model(animationType, modelName.c_str()));
+  models.push_back(std::make_shared<Model>(animationType, modelName.c_str()));
   if(models.back()->IsValid())
   {
     models.back()->SetStartPosition(Point2D(objx, objz));
@@ -236,7 +217,7 @@ void Environment::ParseBillboard(const std::vector<std::string> &subStrings)
   int billboardZ = atoi(subStrings[2].c_str());
   int billboardX = atoi(subStrings[2].c_str());
 
-  Billboard *newBillboard = new Billboard(Point3D(billboardX, map->grayValues[billboardX-1][billboardZ-1], billboardZ));
+  auto newBillboard = std::make_shared<Billboard>(Point3D(billboardX, map->grayValues[billboardX-1][billboardZ-1], billboardZ));
   
   int width, height;
   if(LoadTextures(billboardFilename, &billboardTextures[newBillboard], width, height))		//if it loads the texture correctly
@@ -377,7 +358,7 @@ void Environment::ParseRing(const std::vector<std::string> &subStrings)
   double sphRad = atof(subStrings[5].c_str());
   double rRad = atof(subStrings[6].c_str());
 
-  rings.push_back(new SphereRing(Point3D(x, y, z), ang, num, sphRad, rRad));
+  rings.push_back(std::make_shared<SphereRing>(Point3D(x, y, z), ang, num, sphRad, rRad));
 
   printf("DONE\n");
 }
