@@ -125,7 +125,6 @@ int waterSign = 1;
 //other variables
 float terrainAngle;	//represents the initial angle to look at, for a square map this should be pi/4 radians
 
-float*** normals;					//like terrain, but holds normal vector for each quad
 float*** averageNormals;			//holds average normal vector for each vertex
 
 float viewer[3] = {0, 50, 0};		//position of camera
@@ -139,6 +138,73 @@ Box box(8, 3, 8, Point3D(10, 10, 10));
 
 std::shared_ptr<Renderer> renderer;
 Environment environment;
+
+void TempUpdatePlayerBox(double dt)
+{
+  float x = (float)box.GetPosition().GetX();
+  float y = (float)box.GetPosition().GetY();
+  float z = (float)box.GetPosition().GetZ();
+
+  float xlen = box.GetXlen();
+  float ylen = box.GetYlen();
+  float zlen = box.GetZlen();
+
+  if(fabs(player.GetPosition().GetY() - (y + ylen/2)) < player.GetHeight())
+  {
+    if(fabs(player.GetZ() - z) < zlen/2 && fabs(player.GetX() - x) < xlen/2)
+    {
+      if(yVel <= 0)
+      {
+        player.SetJumping(false);
+        player.SetOnBox(true);
+        player.SetY(y + ylen/2 + player.GetHeight());
+        yVel = 0;
+        if(box.GetSide() == 0)
+          player.SetX(player.GetX() + 30*dt);
+        if(box.GetSide() == 1)
+          player.SetZ(player.GetZ() + 30*dt);
+        if(box.GetSide() == 2)
+          player.SetX(player.GetX() - 30*dt);
+        if(box.GetSide() == 3)
+          player.SetZ(player.GetZ() - 30*dt);
+      }
+    }
+    else if(player.IsOnBox())
+    {
+      player.SetJumping(true);
+      player.SetY(y + ylen/2 + player.GetHeight());
+      player.SetOnBox(false);
+      jumpHeight = y + ylen/2 + player.GetHeight();
+    }
+    else
+    {
+      if(fabs(player.GetZ() - z) < zlen/2)
+      {
+        if((player.GetX() - x > - xlen/2 - player.GetRad()) && (player.GetX() - x < 0))
+        {
+          player.SetX(x - xlen/2 - player.GetRad());
+        }
+        else if(player.GetX() - x < xlen/2 + player.GetRad())
+        {
+          if(player.GetX() - x > 0)
+            player.SetX(x + xlen/2 + player.GetRad());
+        }
+      }
+      if(fabs(player.GetX() - x) < xlen/2)
+      {
+        if((player.GetZ() - z > - zlen/2 - player.GetRad()) && (player.GetZ() - z < 0))
+        {
+          player.SetZ(z - zlen/2 - player.GetRad());
+        }
+        else if(player.GetZ() - z < zlen/2 + player.GetRad())
+        {
+          if(player.GetZ() - z > 0)
+            player.SetZ(z + zlen/2 + player.GetRad());
+        }
+      }
+    }
+  }
+}
 
 void quit()
 {
@@ -190,7 +256,7 @@ void getNormal(float *norm,float pointa[3],float pointb[3],float pointc[3])
 }
 
 //I chose to average the normals to achieve a better lighting effect
-void averageNormal()
+void averageNormal(float ***normals)
 {
   //averages the normals for each vertex
   for(int i = 0; i < environment.map->height; i++)
@@ -491,13 +557,6 @@ void drawSuns()
   glDisable(GL_TEXTURE_2D);
 }
 
-void drawBox()
-{
-  if(glIsEnabled(GL_LIGHTING))
-    glCallList(boxLightList);
-  box.draw(FPS);
-}
-
 //updates the camera position
 void UpdateCamera()
 {
@@ -661,7 +720,10 @@ void display(SDL_Window *window)
   renderer->Render3D(1 / FPS, player.GetPosition());
 
   if(box.Exists())
-    drawBox();
+  {
+    box.UpdatePosition(1 / FPS);
+    TempUpdatePlayerBox(1 / FPS);
+  }
 
   UpdateCamera();	//positions the camera correctly
 
@@ -708,64 +770,45 @@ void Initialize(SDL_Window *window)
   }
 
   //creates a 3D array to store normal vectors
-  normals = (float ***)malloc((map->height)*sizeof(float**));
+  float ***normals = new float**[map->height]; //like terrain, but holds normal vector for each quad
+  averageNormals = new float**[map->height]; //creates a 3D array to store normal average vectors for each vertex
   for (int i = 0; i < map->height; i++)
   {
-    normals[i] = (float **)malloc((map->width)*sizeof(float*));
+    normals[i] = new float*[map->width];
+    averageNormals[i] = new float*[map->width];
     for (int j = 0; j < map->width; j++)
     {
-      normals[i][j] = (float *)malloc(3*sizeof(float));
-    }
-  }
+      normals[i][j] = new float[3];
+      averageNormals[i][j] = new float[3];
 
-  //initialized to 0 for easy calculations when averaging
-  for (int i = 0; i < map->height; i++)
-  {
-    for (int j = 0; j < map->width; j++)
-    {
       normals[i][j][0] = 0;
       normals[i][j][1] = 0;
       normals[i][j][2] = 0;
-    }
-  }
 
-  //fills the array with the normals
-  for (int i = 0; i < map->height - 1; i++)
-  {
-    for (int j = 0; j < map->width - 1; j++)
-    {
       float pointa[3], pointb[3], pointc[3];
 
-      //the normal is V0 X V1, where V0 is a vector represented by
-      //pointb - pointa, and V1 is pointc - pointa
-      pointa[0] = i * XLEN;
-      pointa[1] = map->grayValues[i][j];
-      pointa[2] = j * ZLEN;
+      if(i < map->height - 1 && j < map->width - 1)
+      {
+        //the normal is V0 X V1, where V0 is a vector represented by
+        //pointb - pointa, and V1 is pointc - pointa
+        pointa[0] = i * XLEN;
+        pointa[1] = map->grayValues[i][j];
+        pointa[2] = j * ZLEN;
 
-      pointb[0] = (i + 1) * XLEN;
-      pointb[1] = map->grayValues[i+1][j+1];
-      pointb[2] = (j + 1) * ZLEN;
+        pointb[0] = (i + 1) * XLEN;
+        pointb[1] = map->grayValues[i+1][j+1];
+        pointb[2] = (j + 1) * ZLEN;
 
-      pointc[0] = (i + 1) * XLEN;
-      pointc[1] = map->grayValues[i+1][j];
-      pointc[2] = j * ZLEN;
+        pointc[0] = (i + 1) * XLEN;
+        pointc[1] = map->grayValues[i+1][j];
+        pointc[2] = j * ZLEN;
 
-      getNormal(normals[i][j], pointa, pointb, pointc);
+        getNormal(normals[i][j], pointa, pointb, pointc);
+      }
     }
   }
 
-  //creates a 3D array to store normal average vectors for each vertex
-  averageNormals = (float ***)malloc((map->height)*sizeof(float**));
-  for(int i = 0; i < map->height; i++)
-  {
-    averageNormals[i] = (float **)malloc((map->width)*sizeof(float*));
-    for(int j = 0; j < map->width; j++)
-    {
-      averageNormals[i][j] = (float *)malloc(3*sizeof(float));
-    }
-  }
-
-  averageNormal();	//fill the array with the average normals
+  averageNormal(normals);	//fill the array with the average normals
 
   //frees the memory allocated for float ***normals
   for(int i = 0; i < map->height; i++)
@@ -983,6 +1026,7 @@ void Initialize(SDL_Window *window)
 
   renderer->ringLightingNotPassedList = ringLightingNotPassedList;
   renderer->ringLightingPassedList = ringLightingPassedList;
+  renderer->box = &box;
 
   for(auto &ring : environment.rings)
   {

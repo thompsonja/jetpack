@@ -1,9 +1,6 @@
 #ifndef AUDIO_H
 #define AUDIO_H
 
-#ifdef _WIN32
-#include <Windows.h>
-#endif
 #include "SDL.h"
 #include "SDL_mixer.h"
 #include <map>

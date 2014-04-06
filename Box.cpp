@@ -1,12 +1,4 @@
 #include "Box.h"
-#include <Windows.h>
-#include <glut.h>
-#include "User.h"
-#include <math.h>
-
-extern User player;
-extern float yVel;
-extern float jumpHeight;
 
 Box::Box(float xlen, float ylen, float zlen, const Point3D &position) :
   xlen(xlen),
@@ -17,126 +9,36 @@ Box::Box(float xlen, float ylen, float zlen, const Point3D &position) :
 {
 }
 
-void Box::draw(float FPS)
+void Box::UpdatePosition(double dt)
 {
-  float x = (float)position.GetX();
-  float y = (float)position.GetY();
-  float z = (float)position.GetZ();
+  auto x = position.GetX();
+  auto y = position.GetY();
+  auto z = position.GetZ();
 
-	glBegin(GL_QUADS);
-	glNormal3f(-1, 0, 0);
-	glVertex3f(x + xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z + zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y + ylen/2, z - zlen/2);
-	glNormal3f(1, 0, 0);
-	glVertex3f(x - xlen/2, y - ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x - xlen/2, y - ylen/2, z - zlen/2);
-	glNormal3f(0, 0, -1);
-	glVertex3f(x - xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z - zlen/2);
-	glVertex3f(x - xlen/2, y - ylen/2, z - zlen/2);
-	glNormal3f(0, 0, 1);
-	glVertex3f(x + xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y - ylen/2, z + zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z + zlen/2);
-	glNormal3f(0, -1, 0);
-	glVertex3f(x - xlen/2, y - ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z - zlen/2);
-	glVertex3f(x + xlen/2, y - ylen/2, z + zlen/2);
-	glVertex3f(x - xlen/2, y - ylen/2, z + zlen/2);
-	glNormal3f(0, 1, 0);
-	glVertex3f(x + xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z - zlen/2);
-	glVertex3f(x - xlen/2, y + ylen/2, z + zlen/2);
-	glVertex3f(x + xlen/2, y + ylen/2, z + zlen/2);
-	glEnd();
-
-	if(side == 0)
-	{
-		x += 30/FPS;
-		if(x + xlen/2 >= 381)
-			side = 1;
-	}
-	if(side == 1)
-	{
-		z += 30/FPS;
-		if(z + zlen/2 >= 381)
-			side = 2;
-	}
-	if(side == 2)
-	{
-		x -= 30/FPS;
-		if(x - xlen/2 <= 0)
-			side = 3;
-	}
-	if(side == 3)
-	{
-		z -= 30/FPS;
-		if(z - zlen/2 <= 0)
-			side = 0;
-	}
-
-	if(fabs(player.GetY() - (y + ylen/2)) < player.GetHeight())
-	{
-		if(fabs(player.GetZ() - z) < zlen/2 && fabs(player.GetX() - x) < xlen/2)
-		{
-			if(yVel <= 0)
-			{
-        player.SetJumping(false);
-				player.SetOnBox(true);
-				player.SetY(y + ylen/2 + player.GetHeight());
-				yVel = 0;
-				if(side == 0)
-					player.SetX(player.GetX() + 30/FPS);
-				if(side == 1)
-					player.SetZ(player.GetZ() + 30/FPS);
-				if(side == 2)
-					player.SetX(player.GetX() - 30/FPS);
-				if(side == 3)
-					player.SetZ(player.GetZ() - 30/FPS);
-
-			}
-		}
-		else if(player.IsOnBox())
-		{
-			player.SetJumping(true);
-			player.SetY(y + ylen/2 + player.GetHeight());
-			player.SetOnBox(false);
-			jumpHeight = y + ylen/2 + player.GetHeight();
-		}
-		else
-		{
-			if(fabs(player.GetZ() - z) < zlen/2)
-			{
-				if((player.GetX() - x > - xlen/2 - player.GetRad()) && (player.GetX() - x < 0))
-				{
-					player.SetX(x - xlen/2 - player.GetRad());
-				}
-				else if(player.GetX() - x < xlen/2 + player.GetRad())
-				{
-					if(player.GetX() - x > 0)
-						player.SetX(x + xlen/2 + player.GetRad());
-				}
-			}
-			if(fabs(player.GetX() - x) < xlen/2)
-			{
-				if((player.GetZ() - z > - zlen/2 - player.GetRad()) && (player.GetZ() - z < 0))
-				{
-					player.SetZ(z - zlen/2 - player.GetRad());
-				}
-				else if(player.GetZ() - z < zlen/2 + player.GetRad())
-				{
-					if(player.GetZ() - z > 0)
-						player.SetZ(z + zlen/2 + player.GetRad());
-				}
-			}
-		}
-	}
+  if(side == 0)
+  {
+    x += 30*dt;
+    if(x + xlen/2 >= 381)
+      side = 1;
+  }
+  if(side == 1)
+  {
+    z += 30*dt;
+    if(z + zlen/2 >= 381)
+      side = 2;
+  }
+  if(side == 2)
+  {
+    x -= 30*dt;
+    if(x - xlen/2 <= 0)
+      side = 3;
+  }
+  if(side == 3)
+  {
+    z -= 30*dt;
+    if(z - zlen/2 <= 0)
+      side = 0;
+  }
 
   position.Set(x, y, z);
 }
