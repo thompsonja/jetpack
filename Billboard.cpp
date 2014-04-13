@@ -1,6 +1,8 @@
 #include "Billboard.h"
 #include "Image.h"
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 #include <GL/glut.h>
 #include <math.h>
 

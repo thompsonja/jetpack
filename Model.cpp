@@ -1,12 +1,13 @@
 #include "Model.h"
 #include <stdio.h>
+#include <string.h>
 
 Model::Model(AnimationType type, const char *baseFilename) :
   type(type),
   baseFilename(baseFilename),
+  minHeight(0),
   numTotalFrames(1),
-  currentFrame(0),
-  minHeight(0)
+  currentFrame(0)
 {
   if(type == MODEL_STATIC)
   {
@@ -30,13 +31,14 @@ Model::Model(AnimationType type, const char *baseFilename) :
     rootName[i] = '\0';
 
     char buffer[256];
+    memset(buffer, 0, 256*sizeof(char));
     int fileCounter = 1;
     //calculates how many files are in a row
-    for(sprintf(buffer, "%s%.2d.mod\0", rootName, fileCounter); 
+    for(sprintf(buffer, "%s%.2d.mod", rootName, fileCounter); 
       (fopen(buffer, "r") != NULL); )
     {
       fileCounter++;
-      sprintf(buffer, "%s%.2d.mod\0", rootName, fileCounter);
+      sprintf(buffer, "%s%.2d.mod", rootName, fileCounter);
     }
     //fileCounter will end up being one more than the number of files, so reduce it by one
     numTotalFrames = fileCounter-1;
@@ -49,7 +51,7 @@ Model::Model(AnimationType type, const char *baseFilename) :
     //this is the same as for the static case, but this does it for each file
     for(int i = 0; i < numTotalFrames; i++)
     {
-      sprintf(buffer, "%s%.2d%s\0", rootName, i+1, ".mod");
+      sprintf(buffer, "%s%.2d%s", rootName, i+1, ".mod");
       valid = LoadFrame(i, buffer);
       if(!valid)
         return;

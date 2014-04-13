@@ -1,7 +1,9 @@
 #ifndef RENDERER_H
 #define RENDERER_H
 
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 #include <GL/glut.h>
 #include <map>
 #include <memory>

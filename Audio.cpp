@@ -15,7 +15,7 @@ void Audio::Initialize()
   if(Mix_OpenAudio(audio_rate, audio_format, audio_channels, audio_buffers) != 0) 
   {
     printf("Unable to initialize audio: %s\n", Mix_GetError());
-    exit(1);
+    //exit(1);
   }
 
   //Load our WAV file from disk

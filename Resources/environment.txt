@@ -13,9 +13,9 @@ BILLBOARD   CamAgaci Textures/Tree.bmp 20 20
 BILLBOARD   CamAgaci Textures/Tree.bmp 3 3
 BILLBOARD   CamAgaci Textures/Tree.bmp 5 5
 BILLBOARD   CamAgaci Textures/Tree.bmp 100 100
-SKYDOME Textures/Sky0.bmp 3
+SKYDOME Textures/sky0.bmp 3
 WATER Textures/PrairieWind.bmp 3 0.1
-SUN  Textures/nebula.bmp  Textures/star.bmp
+SUN  Textures/nebula.bmp  Textures/Star.bmp
 //RING X Y Z rotationspeed numberofspheres sphereradius ringradius
 RING 10 50 20 30 12 1 10
 RING 100 20 100 30 12 1 10

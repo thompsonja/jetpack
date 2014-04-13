@@ -1,5 +1,7 @@
 #include "Light.h"
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 #include <GL/glut.h>
 
 void Light::SetGlLight()

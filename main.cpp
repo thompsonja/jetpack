@@ -634,7 +634,7 @@ void jump(float FPS, float terrainHeight)
       jumpFactor = terrainHeight - jumpHeight;
     }
 
-    int ringsPassed = 0;
+    unsigned int ringsPassed = 0;
     for(auto &ring : environment.rings)
     {
       if(ring->isPassed())
@@ -1057,11 +1057,11 @@ int main(int argc, char **argv)
   float heightTemp;
   float heightPrev;
 
-  RECT windowRect;
-  GetWindowRect(GetDesktopWindow(), &windowRect);
-  width = windowRect.right - windowRect.left;
-  height = windowRect.bottom - windowRect.top;
-  printf("%d %d\n", width, height);
+//  RECT windowRect;
+//  GetWindowRect(GetDesktopWindow(), &windowRect);
+//  width = windowRect.right - windowRect.left;
+//  height = windowRect.bottom - windowRect.top;
+//  printf("%d %d\n", width, height);
 
   if (SDL_Init(SDL_INIT_VIDEO) != 0) 
   {

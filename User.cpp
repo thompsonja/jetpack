@@ -1,5 +1,7 @@
 #include "User.h"
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 #include <GL/glut.h>
 #include <math.h>
 
@@ -11,8 +13,8 @@ User::User() :
   position(0, 0, 0),
   height(6),
   rad(1.5),
-  isOnBox(false),
   isJumping(false),
+  isOnBox(false),
   speed(1)
 {
 }

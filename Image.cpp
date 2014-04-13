@@ -6,12 +6,12 @@ Image::Image(std::string filename)
   //some error handling
   if((inf = fopen(filename.c_str(), "r+")) == NULL)
   {
-    printf("Unable to open pgm file: %s!\n", filename);
+    printf("Unable to open pgm file: %s!\n", filename.c_str());
     exit(1);
   }
   if(fscanf(inf, " P2 "))
   {
-    printf("not a valid pgm: %s!\n",filename);
+    printf("not a valid pgm: %s!\n",filename.c_str());
     exit(1);
   }
 

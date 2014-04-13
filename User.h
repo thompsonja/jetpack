@@ -32,8 +32,8 @@ public:
   void SetOnBox(bool val);
 private:
   Point3D position;
-	float height;
-	float rad;
+  float height;
+  float rad;
   bool isJumping;
   bool isOnBox;
   float speed;

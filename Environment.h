@@ -1,7 +1,9 @@
 #ifndef ENVIRONMENT_H
 #define ENVIRONMENT_H
 
+#ifdef _WIN32
 #include <Windows.h>
+#endif
 #include <GL/glut.h>
 #include <string>
 #include <vector>

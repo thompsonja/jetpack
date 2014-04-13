@@ -4,6 +4,8 @@
 *.vcxproj.filters
 *.sdf
 *.opensdf
+*.o
+*.depend
 
 [Dd]ebug/
 [Dd]ebugPublic/
