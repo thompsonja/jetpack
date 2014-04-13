@@ -1,6 +1,6 @@
 #include "Light.h"
 #include <Windows.h>
-#include "glut.h"
+#include <GL/glut.h>
 
 void Light::SetGlLight()
 {

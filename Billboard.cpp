@@ -1,7 +1,7 @@
 #include "Billboard.h"
 #include "Image.h"
 #include <Windows.h>
-#include <glut.h>
+#include <GL/glut.h>
 #include <math.h>
 
 Billboard::Billboard(Point3D position) :

@@ -58,7 +58,7 @@ to be outside of the terrain.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <glut.h>
+#include <GL/glut.h>
 #include <time.h>
 #include <math.h>
 #include "User.h"
@@ -139,6 +139,7 @@ Box box(8, 3, 8, Point3D(10, 10, 10));
 std::shared_ptr<Renderer> renderer;
 Environment environment;
 
+// This is a temporary function performing box/player logic
 void TempUpdatePlayerBox(double dt)
 {
   float x = (float)box.GetPosition().GetX();
@@ -1034,6 +1035,18 @@ void Initialize(SDL_Window *window)
   }
 }
 
+void ProcessInput()
+{
+}
+
+void UpdateWorld()
+{
+}
+
+void Render()
+{
+}
+
 int main(int argc, char **argv)
 {
   chdir("Resources");
@@ -1105,7 +1118,6 @@ int main(int argc, char **argv)
   bool running = true;
   while(running) 
   {
-    display(window);
     dtPrev = dt;
     dt = SDL_GetTicks();
     avgFrame[index] = dt - dtPrev;
@@ -1115,6 +1127,13 @@ int main(int argc, char **argv)
       FPS += avgFrame[i];
     FPS /= 20;
     FPS = 1000/FPS;
+
+    ProcessInput();
+
+    UpdateWorld();
+
+    display(window);
+
 
     //printf("FPS = %f\n", FPS);
     //Get the next event from the stack

@@ -2,7 +2,7 @@
 #define ENVIRONMENT_H
 
 #include <Windows.h>
-#include <glut.h>
+#include <GL/glut.h>
 #include <string>
 #include <vector>
 #include <map>

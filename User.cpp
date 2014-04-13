@@ -1,6 +1,6 @@
 #include "User.h"
 #include <Windows.h>
-#include <glut.h>
+#include <GL/glut.h>
 #include <math.h>
 
 extern float terrainAngle;
